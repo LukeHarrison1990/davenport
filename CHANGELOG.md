@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.1 — 2026-10-22
+
+- Fixed: first sync of a large mailbox could hit Google's "Quota exceeded … Units per minute per user" limit and stall. Gmail calls are now paced below Google's per-user quota, every call for the account pauses together when Google asks it to slow down, and an interrupted first sync resumes where it left off instead of starting again.
+- Rate-limit pauses now show as "Syncing" in the status bar rather than as an error.
+
 ## 1.0.0 — 2026-10-21
 
 First release.

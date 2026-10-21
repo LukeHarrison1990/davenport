@@ -7,7 +7,7 @@ import type { Addr, Draft, Folder, MessageDetail, OutboxItem, Rule, SendAs, Vaca
 import { all, get, kvAll, kvDelete, kvGet, kvSet, run, tx, uid } from '../db';
 import { changed, emit, toast } from '../events';
 import { Gmail, ruleToQuery, type GFilter, type ParsedMessage } from '../google/gmail';
-import { GoogleApiError, ReauthRequired } from '../google/http';
+import { GoogleApiError, QuotaExceeded, ReauthRequired } from '../google/http';
 import { buildMime, htmlToText, type MimeAttachment } from '../google/mime';
 import { getSettings } from '../settings';
 import { client, getAccount, isDemo, listAccounts, setStatus } from './accounts';
@@ -107,6 +107,7 @@ export async function syncMail(accountId: string): Promise<void> {
     setStatus(accountId, 'ok');
   } catch (e) {
     if (e instanceof ReauthRequired) setStatus(accountId, 'reauth', e.message);
+    else if (e instanceof QuotaExceeded) setStatus(accountId, 'syncing', 'Pausing for Google’s rate limit — continuing shortly');
     else if (e instanceof TypeError) setStatus(accountId, 'offline', 'No connection');
     else setStatus(accountId, 'error', (e as Error).message);
     throw e;
@@ -123,17 +124,21 @@ async function initialSync(accountId: string): Promise<void> {
   const days = getSettings().syncDays;
 
   // Inbox first so the window is useful within seconds, then everything else in the sync window.
-  const inbox = await g.listIds(undefined, ['INBOX'], 300);
-  await fetchAndStore(accountId, inbox.map((m) => m.id));
-  changed('mail', accountId);
+  // Anything already downloaded by an earlier, interrupted attempt is skipped, so a restart resumes.
+  const have = new Set(all<{ id: string }>('SELECT id FROM messages WHERE account_id = ?', accountId).map((r) => r.id));
+  const inbox = (await g.listIds(undefined, ['INBOX'], 300)).map((m) => m.id).filter((id) => !have.has(id));
+  for (let i = 0; i < inbox.length; i += 50) {
+    await fetchAndStore(accountId, inbox.slice(i, i + 50));
+    inbox.slice(i, i + 50).forEach((id) => have.add(id));
+    changed('mail', accountId);
+  }
 
   const rest = await g.listIds(`newer_than:${days}d`, undefined, 20000, true);
   const drafts = await g.listIds(undefined, ['DRAFT'], 500);
-  const have = new Set(all<{ id: string }>('SELECT id FROM messages WHERE account_id = ?', accountId).map((r) => r.id));
-  const todo = [...rest, ...drafts].map((m) => m.id).filter((id) => !have.has(id));
-  for (let i = 0; i < todo.length; i += 200) {
-    await fetchAndStore(accountId, todo.slice(i, i + 200));
-    setStatus(accountId, 'syncing', `Downloading mail (${Math.min(i + 200, todo.length)} of ${todo.length})`);
+  const todo = [...new Set([...rest, ...drafts].map((m) => m.id))].filter((id) => !have.has(id));
+  for (let i = 0; i < todo.length; i += 100) {
+    await fetchAndStore(accountId, todo.slice(i, i + 100));
+    setStatus(accountId, 'syncing', `Downloading mail (${Math.min(i + 100, todo.length).toLocaleString()} of ${todo.length.toLocaleString()})`);
     changed('mail', accountId);
   }
   run('UPDATE accounts SET history_id = ?, initial_done = 1 WHERE id = ?', profile.historyId, accountId);
@@ -635,7 +640,7 @@ async function processOutbox(): Promise<void> {
         run('DELETE FROM outbox WHERE id = ?', row.id);
         toast({ kind: 'success', text: `Sent: ${d.subject || '(no subject)'}` });
       } catch (e) {
-        const offline = e instanceof TypeError;
+        const offline = e instanceof TypeError || e instanceof QuotaExceeded;
         run("UPDATE outbox SET status = ?, error = ?, send_at = ? WHERE id = ?", offline ? 'waiting' : 'failed', (e as Error).message, Date.now() + 60_000, row.id);
         if (!offline) toast({ kind: 'error', text: `Couldn't send "${d.subject}": ${(e as Error).message}` });
       }

@@ -9,6 +9,12 @@ export class ReauthRequired extends Error {
   }
 }
 
+export class QuotaExceeded extends Error {
+  constructor(public accountId: string, public retryInMs: number) {
+    super("Google's rate limit was reached. Davenport will carry on automatically in a minute.");
+  }
+}
+
 export class GoogleApiError extends Error {
   constructor(public status: number, message: string, public reason?: string) {
     super(message);
@@ -40,6 +46,70 @@ function loadTokens(accountId: string): StoredTokens | null {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/**
+ * Keeps Gmail calls under Google's per-user quota (250 units per second, 15,000 per minute).
+ * A token bucket refills at a safe rate below that; when Google still says "slow down",
+ * every request for the account pauses together until the quota window has passed.
+ */
+export class QuotaLimiter {
+  private tokens: number;
+  private last = Date.now();
+  private pausedUntil = 0;
+  private queue: Promise<void> = Promise.resolve();
+
+  constructor(private ratePerSec = 180, private burst = 300) {
+    this.tokens = burst;
+  }
+
+  /** Waits until `cost` units may be spent. Calls are served in order. */
+  take(cost: number): Promise<void> {
+    const run = this.queue.then(async () => {
+      for (;;) {
+        const now = Date.now();
+        if (now < this.pausedUntil) {
+          await sleep(this.pausedUntil - now);
+          continue;
+        }
+        this.tokens = Math.min(this.burst, this.tokens + ((now - this.last) / 1000) * this.ratePerSec);
+        this.last = now;
+        if (this.tokens >= cost) {
+          this.tokens -= cost;
+          return;
+        }
+        await sleep(Math.ceil(((cost - this.tokens) / this.ratePerSec) * 1000));
+      }
+    });
+    this.queue = run.catch(() => undefined);
+    return run;
+  }
+
+  /** Stops all calls for `ms` and empties the bucket, after Google reports the quota is used up. */
+  pause(ms: number): void {
+    this.pausedUntil = Math.max(this.pausedUntil, Date.now() + ms);
+    this.tokens = 0;
+  }
+
+  get pausedFor(): number {
+    return Math.max(0, this.pausedUntil - Date.now());
+  }
+}
+
+/** Gmail API quota cost of a call, in units (from Google's published quota table). */
+export function gmailCost(method: string, url: URL): number {
+  const p = url.pathname.replace(/^\/gmail\/v1\/users\/[^/]+/, '');
+  if (/\/messages\/send$/.test(p)) return 100;
+  if (/batchModify|batchDelete/.test(p)) return 50;
+  if (/^\/drafts/.test(p)) return method === 'GET' ? 5 : 10;
+  if (/^\/history/.test(p)) return 2;
+  if (/^\/profile/.test(p)) return 1;
+  if (/^\/labels/.test(p)) return method === 'GET' ? 1 : 5;
+  if (/^\/settings/.test(p)) return method === 'GET' ? 1 : 5;
+  return 5; // messages.get, messages.list, attachments.get, trash, untrash, modify
+}
+
+export const isQuotaError = (text: string) =>
+  /rateLimitExceeded|userRateLimitExceeded|quotaExceeded|RATE_LIMIT_EXCEEDED|RESOURCE_EXHAUSTED|Quota exceeded/i.test(text);
+
 export interface RequestOptions {
   query?: Record<string, string | number | boolean | string[] | undefined>;
   body?: unknown;
@@ -51,6 +121,8 @@ export interface RequestOptions {
 export class GoogleClient {
   private refreshing: Promise<string> | null = null;
   private memo: StoredTokens | null = null;
+  readonly gmailQuota = new QuotaLimiter();
+  private quotaStrikes = 0;
 
   constructor(public accountId: string) {}
 
@@ -97,7 +169,9 @@ export class GoogleClient {
     }
     let attempt = 0;
     let refreshedOnce = false;
+    const isGmail = u.host === 'gmail.googleapis.com';
     for (;;) {
+      if (isGmail) await this.gmailQuota.take(gmailCost(method, u));
       const token = await this.accessToken();
       const headers: Record<string, string> = { Authorization: 'Bearer ' + token, ...(opts.headers ?? {}) };
       let body: BodyInit | undefined = opts.rawBody;
@@ -120,19 +194,28 @@ export class GoogleClient {
         this.invalidate();
         continue;
       }
-      if ((res.status === 429 || res.status >= 500 || res.status === 403) && attempt < 5) {
-        // 403 is retried only for rate-limit reasons.
-        if (res.status === 403) {
-          const peek = await res.clone().text();
-          if (!/rateLimitExceeded|userRateLimitExceeded|quotaExceeded/.test(peek)) {
-            throw await toError(res, peek);
+      if (res.status === 429 || res.status === 403) {
+        const peek = await res.clone().text();
+        if (res.status === 429 || isQuotaError(peek)) {
+          // Quota used up: pause every call for this account until the per-minute window has rolled over.
+          this.quotaStrikes++;
+          const retryAfter = Number(res.headers.get('retry-after'));
+          const wait = retryAfter > 0 ? retryAfter * 1000 : Math.min(60_000, 10_000 * this.quotaStrikes) + Math.random() * 2000;
+          if (isGmail) this.gmailQuota.pause(wait);
+          if (attempt++ < 8) {
+            if (!isGmail) await sleep(wait);
+            continue;
           }
+          throw new QuotaExceeded(this.accountId, wait);
         }
-        const retryAfter = Number(res.headers.get('retry-after'));
-        await sleep(retryAfter > 0 ? retryAfter * 1000 : 500 * 2 ** attempt + Math.random() * 400);
+        throw await toError(res, peek);
+      }
+      if (res.status >= 500 && attempt < 5) {
+        await sleep(500 * 2 ** attempt + Math.random() * 400);
         attempt++;
         continue;
       }
+      if (res.ok) this.quotaStrikes = Math.max(0, this.quotaStrikes - 1);
       if (!res.ok) throw await toError(res);
       if (res.status === 204) return undefined as T;
       if (opts.responseType === 'text') return (await res.text()) as T;

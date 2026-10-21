@@ -36,6 +36,7 @@ const meta = (m: Msg) => ({
 });
 const add = (m: Msg) => server.messages.set(m.id, m);
 
+let quotaFailures = 0;
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 
 const fakeFetch = vi.fn(async (input: string | URL, init?: RequestInit) => {
@@ -48,6 +49,12 @@ const fakeFetch = vi.fn(async (input: string | URL, init?: RequestInit) => {
     const label = url.searchParams.get('labelIds');
     const list = [...server.messages.values()].filter((m) => !label || m.labelIds.includes(label)).sort((a, b) => b.date - a.date);
     return json({ messages: list.map((m) => ({ id: m.id, threadId: m.threadId })) });
+  }
+  if (quotaFailures > 0 && p.startsWith('/messages/')) {
+    quotaFailures--;
+    return new Response(JSON.stringify({ error: { code: 429, status: 'RESOURCE_EXHAUSTED', message: "Quota exceeded for quota metric 'Total Query Cost' and limit 'Units per minute per user' of service 'gmail.googleapis.com'" } }), {
+      status: 429, headers: { 'content-type': 'application/json', 'retry-after': '1' }
+    });
   }
   const one = (init?.method ?? 'GET') === 'GET' ? p.match(/^\/messages\/([^/]+)$/) : null;
   if (one) {
@@ -148,4 +155,16 @@ describe('Gmail sync', () => {
     await mail.syncMail('g1');
     expect(get<{ history_id: string }>("SELECT history_id FROM accounts WHERE id = 'g1'")?.history_id).toBe(String(server.historyId));
   });
+
+  it('waits out Google rate limits and finishes the sync', async () => {
+    run("UPDATE accounts SET initial_done = 0, history_id = NULL WHERE id = 'g1'");
+    run("DELETE FROM messages WHERE account_id = 'g1'");
+    quotaFailures = 3;
+    const t0 = Date.now();
+    await mail.syncMail('g1');
+    expect(quotaFailures).toBe(0);
+    expect(Date.now() - t0).toBeGreaterThanOrEqual(900); // honoured Retry-After
+    expect(get<{ n: number }>("SELECT COUNT(*) AS n FROM messages WHERE account_id = 'g1'")?.n).toBeGreaterThan(0);
+    expect(get<{ status: string }>("SELECT status FROM accounts WHERE id = 'g1'")?.status).toBe('ok');
+  }, 20000);
 });
