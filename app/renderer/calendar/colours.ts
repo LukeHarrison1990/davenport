@@ -1,0 +1,2 @@
+// Google Calendar's event colours, in the order Google shows them.
+export const EVENT_COLOURS = ['#7986CB', '#33B679', '#8E24AA', '#E67C73', '#F6BF26', '#F4511E', '#039BE5', '#616161', '#3F51B5', '#0B8043', '#D50000'];
