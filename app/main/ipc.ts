@@ -15,6 +15,7 @@ import * as calendar from './services/calendar';
 import * as people from './services/people';
 import * as tasks from './services/tasks';
 import * as chat from './services/chat';
+import * as ooo from './services/outOfOffice';
 import { seedDemo } from './demo';
 import { manualSync, syncAccount } from './sync';
 import { openChildWindow, paramsFor, setTitleBarColour } from './windows';
@@ -242,16 +243,17 @@ const impl: Impl = {
   },
   'gmail.sendAs': (_c, a) => mail.sendAsList(a),
   'gmail.setSignature': (_c, a, e, h) => mail.setSignature(a, e, h),
-  'gmail.vacation': (_c, a) => mail.vacation(a),
-  'gmail.setVacation': (_c, a, v) => mail.setVacation(a, v),
+  'gmail.vacation': (_c, a) => ooo.get(a),
+  'gmail.setVacation': (_c, a, v) => ooo.set(a, v),
 
   'calendar.calendars': () => calendar.calendars(),
   'calendar.setSelected': (_c, a, id, s) => calendar.setSelected(a, id, s),
   'calendar.subscribe': (_c, a, e) => calendar.subscribe(a, e),
   'calendar.events': (_c, s, e) => calendar.events(s, e),
   'calendar.get': (_c, a, c, id) => calendar.getEvent(a, c, id),
-  'calendar.save': (_c, s) => calendar.saveEvent(s),
-  'calendar.delete': (_c, a, c, id, scope) => calendar.deleteEvent(a, c, id, scope),
+  'calendar.save': (_c, s) => ooo.saveEvent(s),
+  'calendar.delete': (_c, a, c, id, scope) => ooo.deleteEvent(a, c, id, scope),
+  'calendar.isAutoReplyLinked': (_c, a, c, id) => ooo.isLinked(a, c, id),
   'calendar.respond': (_c, a, c, id, r) => calendar.respond(a, c, id, r),
   'calendar.freeBusy': (_c, a, emails, s, e) => calendar.freeBusy(a, emails, s, e),
   'calendar.rooms': (_c, a) => calendar.rooms(a),

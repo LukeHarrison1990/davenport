@@ -373,8 +373,8 @@ export function OutOfOfficeDialog({ onClose }: { onClose: () => void }) {
         <>
           <label className="check"><input type="checkbox" checked={v.enabled} onChange={(e) => setV({ ...v, enabled: e.target.checked })} /> <b>Send automatic replies</b></label>
           <div className="row-2" style={{ marginTop: 8 }}>
-            <Field label="Start (optional)"><input type="datetime-local" className="input" value={v.startTime ? toLocalInput(v.startTime) : ''} onChange={(e) => setV({ ...v, startTime: e.target.value ? fromLocalInput(e.target.value) : undefined })} /></Field>
-            <Field label="End (optional)"><input type="datetime-local" className="input" value={v.endTime ? toLocalInput(v.endTime) : ''} onChange={(e) => setV({ ...v, endTime: e.target.value ? fromLocalInput(e.target.value) : undefined })} /></Field>
+            <Field label="Start (optional)"><input type="datetime-local" className="input" value={v.startTime ? toLocalInput(v.startTime) : ''} onChange={(e) => setV({ ...v, startTime: e.target.value ? fromLocalInput(e.target.value) : undefined, blockCalendar: v.blockCalendar ?? true })} /></Field>
+            <Field label="End (optional)"><input type="datetime-local" className="input" value={v.endTime ? toLocalInput(v.endTime) : ''} onChange={(e) => setV({ ...v, endTime: e.target.value ? fromLocalInput(e.target.value) : undefined, blockCalendar: v.blockCalendar ?? true })} /></Field>
           </div>
           <Field label="Subject"><input className="input" value={v.subject} onChange={(e) => setV({ ...v, subject: e.target.value })} placeholder="Out of office" /></Field>
           <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', marginBottom: 10 }}>
@@ -382,6 +382,12 @@ export function OutOfOfficeDialog({ onClose }: { onClose: () => void }) {
           </div>
           <label className="check"><input type="checkbox" checked={v.restrictToContacts} onChange={(e) => setV({ ...v, restrictToContacts: e.target.checked })} /> Only reply to people in my contacts</label>
           <label className="check"><input type="checkbox" checked={v.restrictToDomain} onChange={(e) => setV({ ...v, restrictToDomain: e.target.checked })} /> Only reply to people in my organisation</label>
+          <label className="check" style={{ marginTop: 10 }}>
+            <input type="checkbox" disabled={!v.enabled || !v.startTime || !v.endTime} checked={!!v.blockCalendar && !!v.startTime && !!v.endTime} onChange={(e) => setV({ ...v, blockCalendar: e.target.checked })} />
+            <span><b>Also show me as out of office in Calendar</b> and decline new meetings during this time</span>
+          </label>
+          {(!v.startTime || !v.endTime) && <p className="hint-text" style={{ margin: '2px 0 0 24px' }}>Set a start and end time to block your calendar too.</p>}
+          <p className="hint-text" style={{ marginTop: 12 }}>These are Gmail's automatic replies (the vacation responder), so they work on the web and your phone too, even when Davenport is closed.</p>
         </>
       )}
     </Dialog>

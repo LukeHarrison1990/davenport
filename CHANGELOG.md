@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.6 — 2026-10-22
+
+- Search is now fast at any length. Backspacing a query down to two or three letters used to stall because every message was checked one by one (about 48 seconds per search on 5,000 messages); the search index is now linked directly to each message and indexes short prefixes, so searches take around 0.05 seconds even on 30,000 messages. The index is rebuilt once, automatically, the first time 1.0.6 starts.
+- Automatic replies and Calendar "Out of office" are now linked. Google treats them as two separate features (Gmail's vacation responder and a Calendar out-of-office entry); setting automatic replies with dates now also blocks the same dates in Calendar and declines new meetings (you can untick this), and creating an Out of office entry in Calendar switches automatic replies on for the same dates. Turning either off, or deleting the entry, turns off the other.
+- Saving automatic replies now checks with Gmail that the change was accepted, and says so if it wasn't (for example, if Davenport needs to be signed in again to manage Gmail settings).
+
 ## 1.0.5 — 2026-10-22
 
 - Ctrl+A in Mail selects every message in the current folder wherever the focus is (outside a text box), instead of highlighting the window's text. The window's own labels can no longer be highlighted by accident; email bodies, contact details and anything you type remain selectable.

@@ -5,7 +5,7 @@ import fs from 'node:fs';
 
 let db: DatabaseSync;
 
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
@@ -41,8 +41,10 @@ CREATE TABLE IF NOT EXISTS message_labels (
 );
 CREATE INDEX IF NOT EXISTS ml_msg ON message_labels(account_id, message_id);
 
-CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
-  account_id UNINDEXED, message_id UNINDEXED, subject, sender, recipients, body, tokenize = 'unicode61 remove_diacritics 2'
+-- Full-text index. Each row's rowid is the rowid of its message, so lookups and updates are instant;
+-- prefix indexes keep searches for 2-3 letters fast.
+CREATE VIRTUAL TABLE IF NOT EXISTS mail_index USING fts5(
+  subject, sender, recipients, body, tokenize = 'unicode61 remove_diacritics 2', prefix = '2 3'
 );
 
 CREATE TABLE IF NOT EXISTS outbox (
@@ -90,8 +92,31 @@ export function openDatabase(userDataDir: string, file = 'davenport.db'): Databa
   db.exec('PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL; PRAGMA foreign_keys = OFF;');
   db.exec(SCHEMA);
   const v = get<{ value: string }>('SELECT value FROM meta WHERE key = ?', 'schema');
-  if (!v) run('INSERT INTO meta (key, value) VALUES (?, ?)', 'schema', String(SCHEMA_VERSION));
+  const from = v ? Number(v.value) : SCHEMA_VERSION;
+  if (from < 2) migrateSearchIndex();
+  run('INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value', 'schema', String(SCHEMA_VERSION));
   return db;
+}
+
+/** Version 2 replaced the slow messages_fts table with mail_index; rebuild it once from the cached mail. */
+function migrateSearchIndex(): void {
+  db.exec('DROP TABLE IF EXISTS messages_fts');
+  db.exec('DELETE FROM mail_index');
+  const rows = db.prepare('SELECT rowid AS r, subject, from_name, from_email, to_json, cc_json, body_text, body_html, snippet FROM messages').all() as {
+    r: number; subject: string; from_name: string | null; from_email: string; to_json: string; cc_json: string; body_text: string | null; body_html: string | null; snippet: string;
+  }[];
+  const ins = db.prepare('INSERT INTO mail_index (rowid, subject, sender, recipients, body) VALUES (?, ?, ?, ?, ?)');
+  db.exec('BEGIN');
+  for (const m of rows) {
+    const people = [...JSON.parse(m.to_json || '[]'), ...JSON.parse(m.cc_json || '[]')] as { name?: string; email: string }[];
+    ins.run(m.r, m.subject ?? '', `${m.from_name ?? ''} ${m.from_email}`, people.map((a) => `${a.name ?? ''} ${a.email}`).join(' '), indexBody(m.body_text, m.body_html, m.snippet));
+  }
+  db.exec('COMMIT');
+}
+
+export function indexBody(text: string | null | undefined, html: string | null | undefined, snippet: string): string {
+  const body = text ?? (html ? html.replace(/<(style|script)[\s\S]*?<\/\1>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ') : snippet);
+  return body.slice(0, 20000);
 }
 
 export function getDb(): DatabaseSync {

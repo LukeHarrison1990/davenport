@@ -139,10 +139,10 @@ export async function removeAccount(accountId: string): Promise<void> {
     if (plain) await revoke(JSON.parse(plain).refresh);
   }
   tx(() => {
+    run('DELETE FROM mail_index WHERE rowid IN (SELECT rowid FROM messages WHERE account_id = ?)', accountId);
     for (const t of ['labels', 'messages', 'message_labels', 'outbox', 'pending_ops', 'calendars', 'events', 'contacts', 'contact_groups', 'tasklists', 'tasks', 'chat_spaces', 'chat_messages']) {
       run(`DELETE FROM ${t} WHERE account_id = ?`, accountId);
     }
-    run("DELETE FROM messages_fts WHERE account_id = ?", accountId);
     run('DELETE FROM accounts WHERE id = ?', accountId);
   });
   clients.delete(accountId);

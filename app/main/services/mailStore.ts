@@ -1,6 +1,6 @@
 // Mail in the local cache: storing, listing, counting and searching messages.
 import type { Addr, Folder, ListQuery, MessageDetail, MessageSummary } from '../../shared/types';
-import { all, get, kvAll, run, tx } from '../db';
+import { all, get, indexBody, kvAll, run, tx } from '../db';
 import type { ParsedMessage } from '../google/gmail';
 import { getSettings } from '../settings';
 
@@ -90,13 +90,14 @@ export function upsertMessage(accountId: string, p: ParsedMessage): void {
       existing?.snooze_until ?? null, existing?.flag_due ?? null, existing?.task_id ?? null
     );
     writeLabels(accountId, p.id, p.labelIds);
-    run('DELETE FROM messages_fts WHERE account_id = ? AND message_id = ?', accountId, p.id);
+    const row = get<{ r: number; body_text: string | null; body_html: string | null }>(
+      'SELECT rowid AS r, body_text, body_html FROM messages WHERE account_id = ? AND id = ?', accountId, p.id
+    )!;
     const recipients = [...p.to, ...p.cc].map((a) => `${a.name ?? ''} ${a.email}`).join(' ');
-    const body = p.text ?? (p.html ? p.html.replace(/<[^>]+>/g, ' ') : p.snippet);
-    run(
-      'INSERT INTO messages_fts (account_id, message_id, subject, sender, recipients, body) VALUES (?, ?, ?, ?, ?, ?)',
-      accountId, p.id, p.subject, `${p.from.name ?? ''} ${p.from.email}`, recipients, body.slice(0, 20000)
-    );
+    // When only headers were refreshed, keep indexing the full body we already have.
+    const body = p.full ? indexBody(p.text, p.html, p.snippet) : indexBody(row.body_text, row.body_html, p.snippet);
+    run('DELETE FROM mail_index WHERE rowid = ?', row.r);
+    run('INSERT INTO mail_index (rowid, subject, sender, recipients, body) VALUES (?, ?, ?, ?, ?)', row.r, p.subject, `${p.from.name ?? ''} ${p.from.email}`, recipients, body);
   });
 }
 
@@ -137,9 +138,10 @@ export function modifyLocal(accountId: string, ids: string[], add: string[], rem
 export function deleteLocal(accountId: string, ids: string[]): void {
   tx(() => {
     for (const id of ids) {
+      const r = get<{ r: number }>('SELECT rowid AS r FROM messages WHERE account_id = ? AND id = ?', accountId, id)?.r;
+      if (r !== undefined) run('DELETE FROM mail_index WHERE rowid = ?', r);
       run('DELETE FROM messages WHERE account_id = ? AND id = ?', accountId, id);
       run('DELETE FROM message_labels WHERE account_id = ? AND message_id = ?', accountId, id);
-      run('DELETE FROM messages_fts WHERE account_id = ? AND message_id = ?', accountId, id);
     }
   });
 }
@@ -428,7 +430,7 @@ export function list(q: ListQuery): MessageSummary[] {
   }
   if (q.unreadOnly) where.push('m.unread = 1');
   if (fts) {
-    where.push('m.id IN (SELECT message_id FROM messages_fts WHERE messages_fts MATCH ? AND account_id = m.account_id)');
+    where.push('m.rowid IN (SELECT rowid FROM mail_index WHERE mail_index MATCH ?)');
     params.push(fts);
   }
 

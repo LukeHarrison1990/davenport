@@ -33,6 +33,13 @@ export function EventEditor({ initial, onClose }: { initial: Partial<CalEvent>; 
   const [fb, setFb] = useState<FreeBusy[]>([]);
   const [rooms, setRooms] = useState<{ email: string; name: string }[]>([]);
   const [saving, setSaving] = useState(false);
+  const [autoReply, setAutoReply] = useState(true);
+  useEffect(() => {
+    if (initial.id && initial.eventType === 'outOfOffice') {
+      void call('calendar.isAutoReplyLinked', initial.accountId!, initial.calendarId!, initial.id).then(setAutoReply).catch(() => setAutoReply(false));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const isNew = !initial.id;
   const readOnly = !isNew && initial.canEdit === false;
   const me = accounts.find((a) => a.id === ev.accountId);
@@ -94,6 +101,7 @@ export function EventEditor({ initial, onClose }: { initial: Partial<CalEvent>; 
         event: { ...(ev as CalEvent), title: ev.title || (ev.eventType === 'focusTime' ? 'Focus time' : ev.eventType === 'outOfOffice' ? 'Out of office' : 'Working location'), start, end: ev.allDay ? Math.max(end, addDays(startOfDay(start), 1)) : end, recurrence, attendees, meetUrl: ev.meetUrl === 'new' ? undefined : ev.meetUrl },
         addMeet: addMeet && !ev.meetUrl?.startsWith('http'),
         notify: notifyGuests,
+        autoReply: ev.eventType === 'outOfOffice' ? autoReply : undefined,
         scope: ev.recurringEventId ? (window.confirm('Apply changes to the whole series? Choose Cancel to change only this occurrence.') ? 'all' : 'this') : 'this'
       });
       notify(isNew ? (guests.length && notifyGuests ? 'Invitations sent.' : 'Event saved.') : guests.length && notifyGuests ? 'Update sent to guests.' : 'Event saved.');
@@ -193,6 +201,12 @@ export function EventEditor({ initial, onClose }: { initial: Partial<CalEvent>; 
           {(ev.eventType === 'focusTime' || ev.eventType === 'outOfOffice') && (
             <label className="check"><input type="checkbox" checked={!!ev.autoDecline} onChange={(e) => set({ autoDecline: e.target.checked })} /> Automatically decline {ev.eventType === 'outOfOffice' ? 'new invitations during this time' : 'conflicting meetings'}</label>
           )}
+          {ev.eventType === 'outOfOffice' && (
+            <label className="check">
+              <input type="checkbox" checked={autoReply} onChange={(e) => setAutoReply(e.target.checked)} />
+              <span><b>Also send automatic email replies</b> (Gmail) for the same dates, using the message below</span>
+            </label>
+          )}
 
           {!status && (
             <>
@@ -229,7 +243,7 @@ export function EventEditor({ initial, onClose }: { initial: Partial<CalEvent>; 
             </>
           )}
 
-          <Field label="Description">
+          <Field label={ev.eventType === 'outOfOffice' ? 'Message (for automatic replies and declined meetings)' : 'Description'}>
             <textarea className="input" value={(ev.description ?? '').replace(/<br\s*\/?>/g, '\n').replace(/<[^>]+>/g, '')} onChange={(e) => set({ description: e.target.value })} disabled={readOnly} rows={5} />
           </Field>
 

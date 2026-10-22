@@ -96,6 +96,7 @@ export interface Api {
   'calendar.subscribe'(accountId: string, email: string): CalendarInfo;
   'calendar.events'(start: number, end: number): CalEvent[];
   'calendar.get'(accountId: string, calendarId: string, id: string): CalEvent;
+  'calendar.isAutoReplyLinked'(accountId: string, calendarId: string, id: string): boolean;
   'calendar.save'(s: EventSave): CalEvent;
   'calendar.delete'(accountId: string, calendarId: string, id: string, scope?: 'this' | 'all'): void;
   'calendar.respond'(accountId: string, calendarId: string, id: string, response: Response): void;

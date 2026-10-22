@@ -213,6 +213,8 @@ export interface Vacation {
   endTime?: number;
   restrictToContacts: boolean;
   restrictToDomain: boolean;
+  /** Also show as out of office in Calendar (declining new meetings) for the same dates. */
+  blockCalendar?: boolean;
 }
 
 // ---------- Calendar ----------
@@ -274,6 +276,8 @@ export interface EventSave {
   addMeet?: boolean;
   notify?: boolean;
   scope?: 'this' | 'all';
+  /** For out-of-office entries: also switch on Gmail automatic replies for the same dates. */
+  autoReply?: boolean;
 }
 
 export interface BusyBlock {

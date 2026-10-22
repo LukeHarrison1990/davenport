@@ -165,7 +165,7 @@ await check('bottom reading pane sits above the status bar', async () => {
   const rp = await win.locator('.reading').boundingBox();
   const lp = await win.locator('.list-pane').boundingBox();
   if (rp.height < 150) throw new Error('reading pane too small: ' + rp.height);
-  if (lp.y + lp.height > rp.y + 1 || rp.y + rp.height > sb.y + 1) throw new Error('panes overlap the status bar');
+  if (lp.y + lp.height > rp.y + 1 || rp.y + rp.height > sb.y + 1) throw new Error('panes overlap the status bar ' + JSON.stringify({lp, rp, sb}));
   await api('settings.set', { readingPane: 'right' });
 });
 
@@ -244,6 +244,25 @@ await check('calendar: respond to an invitation', async () => {
   await win.waitForTimeout(400);
   const evs = await api('calendar.events', Date.now() - 864e5 * 10, Date.now() + 864e5 * 10);
   if (evs.find((e) => e.title === 'Supplier call')?.myResponse !== 'accepted') throw new Error('not accepted');
+});
+
+await check('automatic replies and Calendar out of office stay linked', async () => {
+  const day = 864e5, start = Date.now() + 2 * day;
+  await api('gmail.setVacation', 'demo', { enabled: true, subject: 'On leave', html: '<p>Back soon</p>', startTime: start, endTime: start + 2 * day, restrictToContacts: false, restrictToDomain: false, blockCalendar: true });
+  let evs = await api('calendar.events', start - day, start + 4 * day);
+  const ooo = evs.find((e) => e.eventType === 'outOfOffice' && e.start === start);
+  if (!ooo) throw new Error('no calendar out-of-office created');
+  if (!(await api('gmail.vacation', 'demo')).blockCalendar) throw new Error('link not reported');
+  await api('calendar.delete', 'demo', ooo.calendarId, ooo.id);
+  if ((await api('gmail.vacation', 'demo')).enabled) throw new Error('replies still on after deleting the calendar entry');
+  // and the other way round, from Calendar
+  const s2 = start + 10 * day;
+  await api('calendar.save', { event: { accountId: 'demo', calendarId: 'primary', title: 'Out of office', start: s2, end: s2 + day, allDay: false, eventType: 'outOfOffice', autoDecline: true, description: 'At a conference' }, autoReply: true });
+  const v = await api('gmail.vacation', 'demo');
+  if (!v.enabled || v.startTime !== s2 || !v.html.includes('conference')) throw new Error('calendar entry did not switch on replies: ' + JSON.stringify(v));
+  await api('gmail.setVacation', 'demo', { ...v, enabled: false });
+  evs = await api('calendar.events', s2 - day, s2 + 2 * day);
+  if (evs.some((e) => e.eventType === 'outOfOffice' && e.start === s2)) throw new Error('calendar entry left behind after turning replies off');
 });
 
 await check('chat: send a message', async () => {

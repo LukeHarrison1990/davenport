@@ -38,6 +38,7 @@ const meta = (m: Msg) => ({
 const add = (m: Msg) => server.messages.set(m.id, m);
 
 let quotaFailures = 0;
+const vacationState = { stored: { enableAutoReply: false } as Record<string, unknown>, ignoreWrites: false };
 const directory = {
   people: Array.from({ length: 1500 }, (_, i) => ({ resourceName: 'people/' + i, names: [{ displayName: 'Person ' + i }], emailAddresses: [{ value: `p${i}@x.com` }] })),
   delta: null as null | unknown[],
@@ -87,6 +88,13 @@ const fakeFetch = vi.fn(async (input: string | URL, init?: RequestInit) => {
     server.sent.push(body);
     add({ id: 'sent-1', threadId: body.threadId ?? 'sent-1', labelIds: ['SENT'], from: 'Me <me@x.com>', subject: 'Sent subject', date: Date.now() });
     return json({ id: 'sent-1', threadId: body.threadId ?? 'sent-1' });
+  }
+  if (p === '/settings/vacation') {
+    if (init?.method === 'PUT') {
+      if (!vacationState.ignoreWrites) vacationState.stored = JSON.parse(String(init.body));
+      return json(vacationState.stored);
+    }
+    return json(vacationState.stored);
   }
   if (p === '/settings/sendAs') return json({ sendAs: [{ sendAsEmail: 'me@x.com', displayName: 'Me', isDefault: true, isPrimary: true, signature: '' }] });
   return json({ error: { message: 'Unhandled ' + p } }, 400);
@@ -198,5 +206,19 @@ describe('Gmail sync', () => {
     expect(list).toHaveLength(1500);
     expect(list.some((c) => c.name === 'New Starter')).toBe(true);
     expect(list.some((c) => c.id === 'people/5')).toBe(false);
+  });
+
+  it('saves automatic replies to Gmail and confirms them', async () => {
+    const start = Date.now() + 864e5;
+    await mail.setVacation('g1', { enabled: true, subject: 'Away', html: '<p>Back Monday</p>', startTime: start, endTime: start + 3 * 864e5, restrictToContacts: false, restrictToDomain: true, blockCalendar: true }, true);
+    expect(vacationState.stored).toMatchObject({ enableAutoReply: true, responseSubject: 'Away', responseBodyHtml: '<p>Back Monday</p>', restrictToDomain: true, startTime: String(start) });
+    expect(vacationState.stored).not.toHaveProperty('blockCalendar');
+    expect((await mail.vacation('g1')).enabled).toBe(true);
+  });
+
+  it('reports a change Gmail did not accept', async () => {
+    vacationState.ignoreWrites = true;
+    await expect(mail.setVacation('g1', { enabled: false, subject: '', html: '', restrictToContacts: false, restrictToDomain: false }, true)).rejects.toThrow(/didn't accept/);
+    vacationState.ignoreWrites = false;
   });
 });

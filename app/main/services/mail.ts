@@ -902,9 +902,19 @@ export async function vacation(accountId: string): Promise<Vacation> {
   if (isDemo(accountId)) return kvGet<Vacation>('vacation', accountId) ?? { enabled: false, subject: '', html: '', restrictToContacts: false, restrictToDomain: false };
   return gmail(accountId).vacation();
 }
-export async function setVacation(accountId: string, v: Vacation): Promise<void> {
-  if (isDemo(accountId)) kvSet('vacation', accountId, v);
-  else await gmail(accountId).setVacation(v);
+export async function setVacation(accountId: string, v: Vacation, quiet = false): Promise<void> {
+  const { blockCalendar: _ignored, ...plain } = v;
+  void _ignored;
+  if (isDemo(accountId)) kvSet('vacation', accountId, plain);
+  else {
+    await gmail(accountId).setVacation(plain);
+    // Read it back, so a change Gmail didn't accept is reported rather than silently lost.
+    const saved = await gmail(accountId).vacation();
+    if (saved.enabled !== plain.enabled) {
+      throw new Error("Gmail didn't accept the automatic reply change. Check that Davenport has permission to manage Gmail settings (Settings › Accounts › sign in again).");
+    }
+  }
+  if (quiet) return;
   toast({ kind: 'success', text: v.enabled ? 'Automatic replies are on.' : 'Automatic replies are off.' });
 }
 
