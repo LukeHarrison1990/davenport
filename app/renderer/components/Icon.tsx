@@ -117,13 +117,19 @@ export function Icon({ name, size = 16, className, title, strokeWidth = 1.6, fil
   );
 }
 
-export function Logo({ size = 22 }: { size?: number }) {
+/** Davenport's mark: an envelope closed with a brass "D" wax seal. */
+export function Logo({ size = 22, tile = false }: { size?: number; tile?: boolean }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="#D9B77A" strokeWidth="1.7" strokeLinejoin="round" aria-hidden>
-      <path d="M3 10l9-5 9 5" />
-      <path d="M4 10h16v10H4z" />
-      <path d="M14 13h4M14 16h4" />
-      <path d="M7 13h4v7" />
+    <svg width={size} height={size} viewBox="0 0 64 64" aria-hidden>
+      {tile && <rect width="64" height="64" rx="14" fill="#1F3A5F" />}
+      <g transform={tile ? undefined : 'translate(-5 -6) scale(1.16)'}>
+        <rect x="9" y="17" width="46" height="32" rx="4.5" fill="#FFFFFF" />
+        <path d="M10.5 47.5L26 37.2M53.5 47.5L38 37.2" stroke="#C8D4E4" strokeWidth="1.8" strokeLinecap="round" />
+        <path d="M9.8 18.6L32 36.2L54.2 18.6z" fill="#DEE6F1" stroke="#B0C1D8" strokeWidth="1.6" strokeLinejoin="round" />
+        <circle cx="32" cy="36.2" r="8.2" fill="#C9A15C" />
+        <circle cx="32" cy="36.2" r="6.6" fill="none" stroke="#AA803E" strokeWidth="1.1" />
+        <path d="M29.7 32.1v8.2M29.7 32.1a4.1 4.1 0 0 1 0 8.2" fill="none" stroke="#5C401A" strokeWidth="1.8" strokeLinecap="round" />
+      </g>
     </svg>
   );
 }

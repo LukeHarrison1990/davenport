@@ -49,6 +49,7 @@ export interface Api {
   'mail.archive'(accountId: string, ids: string[]): void;
   'mail.trash'(accountId: string, ids: string[]): void;
   'mail.restore'(accountId: string, ids: string[]): void;
+  'mail.deleteForever'(accountId: string, ids: string[]): void;
   'mail.spam'(accountId: string, ids: string[], isSpam: boolean): void;
   'mail.snooze'(accountId: string, ids: string[], until: number): void;
   'mail.unsnooze'(accountId: string, ids: string[]): void;

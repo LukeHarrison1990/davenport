@@ -73,3 +73,24 @@ describe('people and tasks', () => {
     expect(myDay().some((t) => t.linkedMessage)).toBe(true);
   });
 });
+
+describe('deleting', () => {
+  it('removes binned mail from every folder except the Bin', () => {
+    setSettings({ conversationView: false });
+    const inAcme = () => store.list({ accountId: acc, folder: { type: 'label', id: 'Label_brightwater' } });
+    const [m] = inAcme();
+    expect(m).toBeDefined();
+    const before = store.folders(acc).find((f) => f.id === 'Label_brightwater')!.total;
+    store.modifyLocal(acc, [m.id], ['TRASH'], ['INBOX', 'UNREAD']);
+    expect(inAcme().some((x) => x.id === m.id)).toBe(false);
+    expect(store.folders(acc).find((f) => f.id === 'Label_brightwater')!.total).toBe(before - 1);
+    expect(store.list({ accountId: acc, folder: { type: 'label', id: 'TRASH' } }).some((x) => x.id === m.id)).toBe(true);
+    expect(store.list({ accountId: acc, folder: { type: 'label', id: 'ALL' } }).some((x) => x.id === m.id)).toBe(false);
+  });
+  it('hides binned sent mail and flagged mail too', () => {
+    const [sent] = store.list({ accountId: acc, folder: { type: 'label', id: 'SENT' } });
+    store.modifyLocal(acc, [sent.id], ['TRASH', 'STARRED'], []);
+    expect(store.list({ accountId: acc, folder: { type: 'label', id: 'SENT' } }).some((x) => x.id === sent.id)).toBe(false);
+    expect(store.list({ accountId: acc, folder: { type: 'flagged' } }).some((x) => x.id === sent.id)).toBe(false);
+  });
+});

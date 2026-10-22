@@ -66,12 +66,12 @@ export function Welcome() {
     <div className="welcome">
       <div className="welcome-card">
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
-          <span style={{ background: 'var(--accent)', borderRadius: 12, padding: 10, display: 'inline-flex' }}><Logo size={34} /></span>
+          <Logo size={54} tile />
           <h1>Welcome to Davenport</h1>
         </div>
         {step === 'start' ? (
           <>
-            <p>Your Gmail, Google Calendar, Contacts, Chat and Tasks in one professional desktop window, with the tools you know from Outlook.</p>
+            <p>A desktop app for Google Workspace: Gmail, Calendar, Contacts, Chat and Tasks together in one window.</p>
             <div className="choice-grid">
               <button className="choice" onClick={() => (info?.hasOAuthClient ? void addGoogle() : setStep('google'))} disabled={busy}>
                 <Icon name="mail" size={22} />
@@ -350,7 +350,7 @@ function About({ info }: { info: AppInfo | null }) {
   return (
     <>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '12px 0' }}>
-        <span style={{ background: 'var(--accent)', borderRadius: 12, padding: 10, display: 'inline-flex' }}><Logo size={30} /></span>
+        <Logo size={50} tile />
         <div>
           <div style={{ fontSize: 18, fontWeight: 600 }}>Davenport {info?.version}</div>
           <div className="hint-text">{info?.platform} · {info?.arch}</div>

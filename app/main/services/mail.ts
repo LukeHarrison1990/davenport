@@ -320,11 +320,24 @@ export function trash(accountId: string, ids: string[]): void {
   changed('folders', accountId);
 }
 
+/** Permanently deletes messages (Delete inside the Bin). */
+export function deleteForever(accountId: string, ids: string[]): void {
+  const expanded = settingsExpand(accountId, ids).filter((id) => store.getLabels(accountId, id).includes('TRASH'));
+  const target = expanded.length ? expanded : ids;
+  store.deleteLocal(accountId, target);
+  enqueue(accountId, 'deleteForever', { ids: target });
+  changed('mail', accountId);
+  changed('folders', accountId);
+}
+
 export function restore(accountId: string, ids: string[]): void {
   const expanded = settingsExpand(accountId, ids);
-  store.modifyLocal(accountId, expanded, ['INBOX'], ['TRASH']);
+  const userLabels = new Set(store.labelRows(accountId).filter((l) => l.type === 'user').map((l) => l.id));
+  const backToInbox = expanded.filter((id) => !store.getLabels(accountId, id).some((l) => userLabels.has(l) || l === 'SENT' || l === 'DRAFT'));
+  store.modifyLocal(accountId, expanded, [], ['TRASH']);
+  store.modifyLocal(accountId, backToInbox, ['INBOX'], []);
   enqueue(accountId, 'untrash', { ids: expanded });
-  enqueue(accountId, 'modify', { ids: expanded, add: ['INBOX'], remove: [] });
+  if (backToInbox.length) enqueue(accountId, 'modify', { ids: backToInbox, add: ['INBOX'], remove: [] });
   changed('mail', accountId);
   changed('folders', accountId);
 }

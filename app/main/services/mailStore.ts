@@ -178,7 +178,8 @@ export function folders(accountId: string): Folder[] {
   for (const r of all<{ label_id: string; total: number; unread: number }>(
     `SELECT l.label_id, COUNT(*) AS total, SUM(m.unread) AS unread FROM message_labels l
      JOIN messages m ON m.account_id = l.account_id AND m.id = l.message_id
-     WHERE l.account_id = ? GROUP BY l.label_id`,
+     WHERE l.account_id = ? AND (l.label_id IN ('TRASH', 'SPAM') OR (m.labels NOT LIKE '%"TRASH"%' AND m.labels NOT LIKE '%"SPAM"%'))
+     GROUP BY l.label_id`,
     accountId
   )) {
     counts.set(r.label_id, { total: r.total, unread: r.unread ?? 0 });
@@ -380,11 +381,15 @@ export function list(q: ListQuery): MessageSummary[] {
         lacksLabel('SPAM');
       } else if (f.id === 'SNOOZED') {
         where.push('m.snooze_until IS NOT NULL');
+        lacksLabel('TRASH');
       } else if (f.id === 'SCHEDULED') {
         return []; // scheduled mail is listed from the outbox
       } else {
         join = 'JOIN message_labels l ON l.account_id = m.account_id AND l.message_id = m.id AND l.label_id = ?';
         params.unshift(f.id);
+        // Gmail keeps a message's other labels when it's binned; like Gmail, only Bin and Spam show those.
+        if (f.id !== 'TRASH') lacksLabel('TRASH');
+        if (f.id !== 'SPAM' && f.id !== 'TRASH') lacksLabel('SPAM');
         if (f.id === 'INBOX' && q.tab && q.tab !== 'all' && s.focusedInbox !== 'off') applyFocused(q.tab, s.focusedInbox, where, params);
       }
       break;
@@ -392,14 +397,18 @@ export function list(q: ListQuery): MessageSummary[] {
       const label = f.label === 'FLAGGED' ? 'STARRED' : f.label;
       join = 'JOIN message_labels l ON l.account_id = m.account_id AND l.message_id = m.id AND l.label_id = ?';
       params.unshift(label);
+      lacksLabel('TRASH');
+      lacksLabel('SPAM');
       if (label === 'INBOX' && q.tab && q.tab !== 'all' && s.focusedInbox !== 'off') applyFocused(q.tab, s.focusedInbox, where, params);
       break;
     }
     case 'flagged':
       where.push('m.starred = 1');
+      lacksLabel('TRASH');
       break;
     case 'snoozed':
       where.push('m.snooze_until IS NOT NULL');
+      lacksLabel('TRASH');
       break;
     case 'scheduled':
       return [];

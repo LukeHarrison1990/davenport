@@ -180,6 +180,7 @@ const impl: Impl = {
   'mail.archive': (_c, a, ids) => mail.archive(a, ids),
   'mail.trash': (_c, a, ids) => mail.trash(a, ids),
   'mail.restore': (_c, a, ids) => mail.restore(a, ids),
+  'mail.deleteForever': (_c, a, ids) => mail.deleteForever(a, ids),
   'mail.spam': (_c, a, ids, s) => mail.spam(a, ids, s),
   'mail.snooze': (_c, a, ids, until) => mail.snooze(a, ids, until),
   'mail.unsnooze': (_c, a, ids) => mail.unsnooze(a, ids),

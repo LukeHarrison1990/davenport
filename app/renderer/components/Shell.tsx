@@ -29,7 +29,7 @@ export function TitleBar({ placeholder, onSearch }: { placeholder: string; onSea
   return (
     <header className={cx('titlebar', platform !== 'darwin' && 'has-overlay')} style={platform === 'darwin' ? { paddingLeft: 84 } : undefined}>
       <div className="brand">
-        <Logo />
+        <Logo size={26} />
         <span>Davenport</span>
       </div>
       {onSearch && (
@@ -141,6 +141,8 @@ export interface RibbonButton {
   title?: string;
   iconColour?: string;
   iconOnly?: boolean;
+  /** A split button: the main action plus an attached arrow that opens this menu. */
+  split?: () => MenuEntry[] | Promise<MenuEntry[]>;
 }
 export interface RibbonGroup {
   label: string;
@@ -167,24 +169,45 @@ export function Ribbon({ tabs, groups }: { tabs?: { id: string; label: string; g
             {gi > 0 && <span className="tb-sep" aria-hidden />}
             <div className="tb-group" role="group" aria-label={g.label}>
               <div className="tb-group-body">
-                {g.buttons.map((b) => (
-                  <button
-                    key={b.label}
-                    className={cx('tb-btn', b.primary && 'primary', b.outline && 'outline', b.iconOnly && 'icon-only')}
-                    aria-label={b.iconOnly ? b.label : undefined}
-                    disabled={b.disabled}
-                    title={b.title ?? b.label}
-                    onClick={async (e) => {
-                      const t = e.currentTarget;
-                      if (b.menu) openMenu(await b.menu(), t);
-                      else b.onClick?.(e);
-                    }}
-                  >
-                    {b.icon && <span style={{ color: b.iconColour, display: 'inline-flex' }}><Icon name={b.icon} size={16} /></span>}
-                    <span>{b.label}</span>
-                    {b.menu && <Icon name="chevDown" size={12} className="chev" />}
-                  </button>
-                ))}
+                {g.buttons.map((b) => {
+                  const btn = (
+                    <button
+                      key={b.label}
+                      className={cx('tb-btn', b.primary && 'primary', b.outline && 'outline', b.iconOnly && 'icon-only', b.split && 'split-main')}
+                      aria-label={b.iconOnly ? b.label : undefined}
+                      disabled={b.disabled}
+                      title={b.title ?? b.label}
+                      onClick={async (e) => {
+                        const t = e.currentTarget;
+                        if (b.menu) openMenu(await b.menu(), t);
+                        else b.onClick?.(e);
+                      }}
+                    >
+                      <span className="tb-icon" style={{ color: b.iconColour }}>{b.icon && <Icon name={b.icon} size={16} />}</span>
+                      <span className="tb-label">
+                        {b.label}
+                        {b.menu && <Icon name="chevDown" size={11} className="chev" />}
+                      </span>
+                    </button>
+                  );
+                  if (!b.split) return btn;
+                  return (
+                    <span key={b.label} className={cx('tb-split', b.primary && 'primary')}>
+                      {btn}
+                      <button
+                        className={cx('tb-btn', 'split-more', b.primary && 'primary')}
+                        aria-label={`More ${b.label.toLowerCase()} options`}
+                        title="More options"
+                        onClick={async (e) => {
+                          const t = e.currentTarget.parentElement as HTMLElement;
+                          openMenu(await b.split!(), t);
+                        }}
+                      >
+                        <Icon name="chevDown" size={12} />
+                      </button>
+                    </span>
+                  );
+                })}
               </div>
               <span className="tb-group-label">{g.label}</span>
             </div>

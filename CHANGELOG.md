@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.2 — 2026-10-22
+
+- Fixed: deleting a message from any folder other than the inbox left it in the folder. Binned and spam mail is now hidden from every folder except Bin and Spam (as in Gmail), and folder counts match.
+- Delete inside the Bin now deletes permanently (after confirming), and the Bin's right-click menu has Restore.
+- Fixed: with the reading pane at the bottom, the pane didn't appear and the message list ran over the status bar. The list and reading pane now split the space, with a draggable divider (remembered between sessions).
+- New mail is now a split button — one click for a new email, the arrow for other new items — replacing the separate "New items" arrow.
+- Classic ribbon: every button has the same height with icons on one line, and dropdown arrows sit beside the label instead of underneath.
+- Search box simply says "Search mail"; welcome text reworded.
+- New logo: an envelope closed with a brass "D" wax seal, used for the app, installer, taskbar, notification area and title bar.
+
 ## 1.0.1 — 2026-10-22
 
 - Fixed: first sync of a large mailbox could hit Google's "Quota exceeded … Units per minute per user" limit and stall. Gmail calls are now paced below Google's per-user quota, every call for the account pauses together when Google asks it to slow down, and an interrupted first sync resumes where it left off instead of starting again.

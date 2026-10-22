@@ -133,6 +133,35 @@ await check('delete with undo restores the message', async () => {
   await win.locator('#message-list .row', { hasText: 'Daniel Reyes' }).waitFor({ timeout: 3000 });
 });
 
+await check('delete from a folder other than the inbox removes it', async () => {
+  await win.locator('.folder', { hasText: 'Finance' }).first().click();
+  const row = win.locator('#message-list .row', { hasText: 'Invoice INV-2041' });
+  await row.click();
+  await win.keyboard.press('Delete');
+  await row.waitFor({ state: 'detached', timeout: 3000 });
+  await win.locator('.folder', { hasText: 'Bin' }).first().click();
+  await win.locator('#message-list .row', { hasText: 'Invoice INV-2041' }).waitFor({ timeout: 3000 });
+  await win.locator('.folder', { hasText: 'Inbox' }).first().click();
+});
+
+await check('bottom reading pane sits above the status bar', async () => {
+  await api('settings.set', { readingPane: 'bottom' });
+  await win.locator('#message-list .row').first().click();
+  await win.locator('.reading iframe.message-frame').first().waitFor();
+  const sb = await win.locator('.statusbar').boundingBox();
+  const rp = await win.locator('.reading').boundingBox();
+  const lp = await win.locator('.list-pane').boundingBox();
+  if (rp.height < 150) throw new Error('reading pane too small: ' + rp.height);
+  if (lp.y + lp.height > rp.y + 1 || rp.y + rp.height > sb.y + 1) throw new Error('panes overlap the status bar');
+  await api('settings.set', { readingPane: 'right' });
+});
+
+await check('New mail split button offers other items', async () => {
+  await win.locator('.split-more').first().click();
+  await win.getByRole('menuitem', { name: 'Event' }).waitFor();
+  await win.keyboard.press('Escape');
+});
+
 await check('flag creates a follow-up task', async () => {
   await win.locator('#message-list .row', { hasText: 'Lena Okafor' }).click({ button: 'right' });
   await win.getByRole('menuitem', { name: /Follow up/ }).click();

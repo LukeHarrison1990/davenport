@@ -56,7 +56,11 @@ export async function respond(sel: Sel, mode: 'reply' | 'replyAll' | 'forward', 
 
 export const del = (sel: Sel) => {
   const f = currentFolderId();
-  if (f === 'TRASH') return each(sel, (a, ids) => call('mail.trash', a, ids));
+  if (f === 'TRASH') {
+    const n = sel.length;
+    if (!window.confirm(`Permanently delete ${n === 1 ? 'this message' : n + ' messages'}? This can't be undone.`)) return;
+    return void each(sel, (a, ids) => call('mail.deleteForever', a, ids));
+  }
   void each(sel, (a, ids) => call('mail.trash', a, ids));
   notify(sel.length === 1 ? 'Moved to Bin.' : `${sel.length} items moved to Bin.`, 'undo', undoAction(sel, 'restore'));
 };
@@ -174,7 +178,8 @@ export function rowMenu(m: MessageSummary, sel: Sel, folders: Folder[], inFolder
     inFolder === 'SPAM'
       ? { label: 'Not spam', icon: 'inbox', onClick: () => void spam(sel, false) }
       : { label: 'Report spam', icon: 'spam', onClick: () => void spam(sel, true) },
-    { label: 'Delete', icon: 'trash', hint: 'Del', danger: true, onClick: () => del(sel) },
+    ...(inFolder === 'TRASH' ? [{ label: 'Restore', icon: 'inbox', onClick: () => void each(sel, (a, ids) => call('mail.restore', a, ids)) }] : []),
+    { label: inFolder === 'TRASH' ? 'Delete permanently' : 'Delete', icon: 'trash', hint: 'Del', danger: true, onClick: () => del(sel) },
     { sep: true },
     { label: 'Create event from email', icon: 'calendar', onClick: () => void createEventFrom(m) },
     { label: 'Create rule…', icon: 'rules', onClick: () => useApp.getState().openDialog('rules', { from: m.from.email, subject: m.subject, accountId: m.accountId }) },

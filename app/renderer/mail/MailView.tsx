@@ -1,5 +1,5 @@
 // The Mail module: ribbon, folder pane, message list, reading pane and To-Do bar.
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Folder } from '../../shared/types';
 import { call, useLive } from '../api';
 import { Rail, Ribbon, StatusBar, TitleBar, type RibbonGroup } from '../components/Shell';
@@ -22,6 +22,19 @@ export function MailView() {
     [accounts.map((a) => a.id).join()],
     [] as Folder[]
   );
+
+  const splitRef = useRef<HTMLDivElement>(null);
+  const clampHeight = (h: number) => {
+    const total = splitRef.current?.getBoundingClientRect().height ?? 700;
+    return Math.round(Math.max(120, Math.min(total - 160, h)));
+  };
+  const [listHeight, setListHeight] = useState(() => {
+    try {
+      return Number(localStorage.getItem('dav.listHeight')) || 300;
+    } catch {
+      return 300;
+    }
+  });
 
   const has = selected.length > 0;
   const one = selected.length === 1;
@@ -73,8 +86,7 @@ export function MailView() {
 
   const home: RibbonGroup[] = [
     { label: 'New', buttons: [
-      { label: 'New mail', icon: 'plus', primary: true, onClick: () => void newMail(), title: 'New mail (Ctrl+N)' },
-      { label: 'New items', icon: 'chevDown', iconOnly: true, menu: () => [
+      { label: 'New mail', icon: 'mail', primary: true, onClick: () => void newMail(), title: 'New mail (Ctrl+N)', split: () => [
         { label: 'Email message', icon: 'mail', onClick: () => void newMail() },
         { label: 'Event', icon: 'calendar', onClick: () => void call('app.openWindow', 'event', {}) },
         { label: 'Contact', icon: 'person', onClick: () => { useApp.getState().setModule('people'); window.dispatchEvent(new Event('dav:new-contact')); } },
@@ -178,13 +190,44 @@ export function MailView() {
   const pane = settings.readingPane;
   return (
     <>
-      <TitleBar placeholder="Search mail — try from:priya has:attachment" onSearch={(q) => setSearch(q)} />
+      <TitleBar placeholder="Search mail" onSearch={(q) => setSearch(q)} />
       <Ribbon groups={home} tabs={tabs} />
       <div className="body">
         <Rail />
         <FolderPane />
-        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: pane === 'bottom' ? 'column' : 'row' }}>
-          <MessageList folders={folders} position={pane} />
+        <div className={'mail-split ' + pane} ref={splitRef}>
+          <MessageList folders={folders} position={pane} height={pane === 'bottom' ? listHeight : undefined} />
+          {pane === 'bottom' && (
+            <div
+              className="splitter"
+              role="separator"
+              aria-orientation="horizontal"
+              aria-label="Resize message list"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'ArrowUp') setListHeight((h) => clampHeight(h - 24));
+                if (e.key === 'ArrowDown') setListHeight((h) => clampHeight(h + 24));
+              }}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                const top = splitRef.current!.getBoundingClientRect().top;
+                const el = e.currentTarget;
+                el.classList.add('dragging');
+                const move = (ev: MouseEvent) => setListHeight(clampHeight(ev.clientY - top));
+                const up = () => {
+                  el.classList.remove('dragging');
+                  window.removeEventListener('mousemove', move);
+                  window.removeEventListener('mouseup', up);
+                  setListHeight((h) => {
+                    try { localStorage.setItem('dav.listHeight', String(h)); } catch { /* ignore */ }
+                    return h;
+                  });
+                };
+                window.addEventListener('mousemove', move);
+                window.addEventListener('mouseup', up);
+              }}
+            />
+          )}
           {pane !== 'off' && <ReadingPane folders={folders} />}
         </div>
         {settings.todoBar && <TodoBar />}
