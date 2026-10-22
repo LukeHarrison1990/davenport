@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.7 — 2026-10-22
+
+- Fixed: turning on automatic replies with "Also show me as out of office in Calendar" failed with "An out of office event must not have a description". Google keeps an out-of-office entry's message in its own decline-message field and refuses a description, so Davenport now sends the message there (and leaves out location, guests and Meet links, which Google also refuses on these entries). The message shows in the Calendar entry as before.
+
 ## 1.0.6 — 2026-10-22
 
 - Search is now fast at any length. Backspacing a query down to two or three letters used to stall because every message was checked one by one (about 48 seconds per search on 5,000 messages); the search index is now linked directly to each message and indexes short prefixes, so searches take around 0.05 seconds even on 30,000 messages. The index is rebuilt once, automatically, the first time 1.0.6 starts.

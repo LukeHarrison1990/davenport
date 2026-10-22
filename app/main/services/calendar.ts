@@ -72,7 +72,8 @@ function fromGoogle(accountId: string, calendarId: string, e: GEvent, calColor: 
     end: parseDate(e.end),
     allDay: !!e.start.date,
     location: e.location,
-    description: e.description,
+    // Out-of-office entries keep their message in declineMessage (Google rejects a description on them).
+    description: e.eventType === 'outOfOffice' ? e.outOfOfficeProperties?.declineMessage ?? e.description : e.description,
     attendees: (e.attendees ?? []).map((a) => ({
       email: a.email, name: a.displayName, response: a.responseStatus ?? 'needsAction', optional: a.optional, resource: a.resource, self: a.self, organizer: a.organizer
     })),
@@ -94,7 +95,7 @@ function fromGoogle(accountId: string, calendarId: string, e: GEvent, calColor: 
   };
 }
 
-function toGoogle(s: EventSave): Partial<GEvent> & Record<string, unknown> {
+export function toGoogle(s: EventSave): Partial<GEvent> & Record<string, unknown> {
   const ev = s.event;
   const tz = localTz();
   const body: Partial<GEvent> & Record<string, unknown> = {
@@ -120,9 +121,12 @@ function toGoogle(s: EventSave): Partial<GEvent> & Record<string, unknown> {
     delete body.attendees;
   } else if (ev.eventType === 'outOfOffice') {
     body.eventType = 'outOfOffice';
-    body.outOfOfficeProperties = { autoDeclineMode: ev.autoDecline ? 'declineAllConflictingInvitations' : 'declineNone', declineMessage: ev.description || 'I am out of office.' };
+    body.outOfOfficeProperties = { autoDeclineMode: ev.autoDecline ? 'declineAllConflictingInvitations' : 'declineNone', declineMessage: ev.description?.trim() || 'I am out of office.' };
+    // Google refuses out-of-office entries that carry a description, location, guests or a Meet link.
+    delete body.description;
     delete body.attendees;
     delete body.location;
+    delete body.conferenceData;
   } else if (ev.eventType === 'workingLocation') {
     body.eventType = 'workingLocation';
     body.visibility = 'public';
@@ -131,7 +135,7 @@ function toGoogle(s: EventSave): Partial<GEvent> & Record<string, unknown> {
     body.workingLocationProperties = /^home$/i.test(label) ? { type: 'homeOffice', homeOffice: {} } : { type: 'customLocation', customLocation: { label } };
     delete body.attendees;
   }
-  if (s.addMeet) body.conferenceData = { createRequest: { requestId: crypto.randomUUID(), conferenceSolutionKey: { type: 'hangoutsMeet' } } };
+  if (s.addMeet && ev.eventType !== 'outOfOffice') body.conferenceData = { createRequest: { requestId: crypto.randomUUID(), conferenceSolutionKey: { type: 'hangoutsMeet' } } };
   return body;
 }
 
