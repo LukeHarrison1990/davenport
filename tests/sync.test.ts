@@ -20,6 +20,7 @@ import { setSettings } from '../app/main/settings';
 import * as mail from '../app/main/services/mail';
 import * as store from '../app/main/services/mailStore';
 import { fromBase64Url } from '../app/main/google/mime';
+import { syncDirectory, directoryList, search as peopleSearch } from '../app/main/services/people';
 
 // ---- A tiny fake Gmail ----
 type Msg = { id: string; threadId: string; labelIds: string[]; from: string; subject: string; date: number };
@@ -37,11 +38,23 @@ const meta = (m: Msg) => ({
 const add = (m: Msg) => server.messages.set(m.id, m);
 
 let quotaFailures = 0;
+const directory = {
+  people: Array.from({ length: 1500 }, (_, i) => ({ resourceName: 'people/' + i, names: [{ displayName: 'Person ' + i }], emailAddresses: [{ value: `p${i}@x.com` }] })),
+  delta: null as null | unknown[],
+  calls: [] as string[]
+};
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 
 const fakeFetch = vi.fn(async (input: string | URL, init?: RequestInit) => {
   const url = new URL(String(input));
   const p = url.pathname.replace('/gmail/v1/users/me', '');
+  if (url.host === 'people.googleapis.com' && url.pathname === '/v1/people:listDirectoryPeople') {
+    directory.calls.push(url.search);
+    if (url.searchParams.get('syncToken')) return json({ people: directory.delta ?? [], nextSyncToken: 'tok-2' });
+    const start = Number(url.searchParams.get('pageToken') ?? 0);
+    const page = directory.people.slice(start, start + 1000);
+    return json(start + 1000 < directory.people.length ? { people: page, nextPageToken: String(start + 1000) } : { people: page, nextSyncToken: 'tok-1' });
+  }
   if (url.host === 'oauth2.googleapis.com') return json({ access_token: 'tok', expires_in: 3600, scope: 'x' });
   if (p === '/profile') return json({ emailAddress: 'me@x.com', historyId: String(server.historyId) });
   if (p === '/labels') return json({ labels: [{ id: 'INBOX', name: 'INBOX', type: 'system' }, { id: 'Label_9', name: 'Clients/Acme', type: 'user' }] });
@@ -167,4 +180,23 @@ describe('Gmail sync', () => {
     expect(get<{ n: number }>("SELECT COUNT(*) AS n FROM messages WHERE account_id = 'g1'")?.n).toBeGreaterThan(0);
     expect(get<{ status: string }>("SELECT status FROM accounts WHERE id = 'g1'")?.status).toBe('ok');
   }, 20000);
+
+  it('downloads the whole Workspace directory, then only changes', async () => {
+    run("UPDATE accounts SET is_workspace = 1 WHERE id = 'g1'");
+    const n = await syncDirectory('g1');
+    expect(n).toBe(1500);
+    expect(directoryList('g1')).toHaveLength(1500);
+    expect(directory.calls).toHaveLength(2); // two pages of 1,000
+    expect(peopleSearch('Person 1499')[0]?.emails[0]).toBe('p1499@x.com');
+    directory.delta = [
+      { resourceName: 'people/new', names: [{ displayName: 'New Starter' }], emailAddresses: [{ value: 'new@x.com' }] },
+      { resourceName: 'people/5', metadata: { deleted: true } }
+    ];
+    await syncDirectory('g1');
+    expect(directory.calls.at(-1)).toContain('syncToken=tok-1');
+    const list = directoryList('g1');
+    expect(list).toHaveLength(1500);
+    expect(list.some((c) => c.name === 'New Starter')).toBe(true);
+    expect(list.some((c) => c.id === 'people/5')).toBe(false);
+  });
 });

@@ -165,6 +165,19 @@ function seedPeople(accountId: string) {
   ];
   tx(() => {
     for (const x of list) run('INSERT OR REPLACE INTO contacts (account_id, id, name, emails, source, json) VALUES (?, ?, ?, ?, ?, ?)', accountId, x.id, x.name, x.emails.join(' '), 'contacts', JSON.stringify(x));
+    const staff: [string, string, string, string][] = [
+      ['Alex Morgan', 'alex', 'Operations Manager', 'Operations'], ['Priya Shah', 'priya.shah', 'Finance Manager', 'Finance'],
+      ['Tom Hargreaves', 'tom.hargreaves', 'Web Lead', 'Digital'], ['Sarah Chen', 'sarah.chen', 'People Partner', 'People'],
+      ['Daniel Reyes', 'daniel.reyes', 'Data Analyst', 'Finance'], ['Hannah Ellis', 'hannah.ellis', 'Office Manager', 'Operations'],
+      ['Oliver Grant', 'oliver.grant', 'Head of IT', 'IT'], ['Amelia Ward', 'amelia.ward', 'Receptionist', 'Operations'],
+      ['James Okoro', 'james.okoro', 'Developer', 'Digital'], ['Grace Liu', 'grace.liu', 'Marketing Lead', 'Marketing'],
+      ['Ethan Price', 'ethan.price', 'Accounts Assistant', 'Finance'], ['Chloe Bennett', 'chloe.bennett', 'Designer', 'Marketing'],
+      ['Mohammed Rahman', 'mohammed.rahman', 'IT Technician', 'IT'], ['Isla Murray', 'isla.murray', 'Facilities Coordinator', 'Operations']
+    ];
+    for (const [name, user, title, dept] of staff) {
+      const d: Contact = { accountId, id: 'people/dir-' + user, name, emails: [user + '@northfield.example'], phones: [], groups: [], source: 'directory', company: 'Northfield · ' + dept, title };
+      run('INSERT OR REPLACE INTO contacts (account_id, id, name, emails, source, json) VALUES (?, ?, ?, ?, ?, ?)', accountId, d.id, d.name, d.emails[0], 'directory', JSON.stringify(d));
+    }
     run("INSERT OR REPLACE INTO contact_groups (account_id, id, name, count) VALUES (?, 'contactGroups/demo-team', 'My team', 4)", accountId);
     run("INSERT OR REPLACE INTO contact_groups (account_id, id, name, count) VALUES (?, 'contactGroups/demo-clients', 'Clients', 2)", accountId);
   });

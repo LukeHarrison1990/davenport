@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.3 — 2026-10-22
+
+- People: Davenport now downloads your whole Google Workspace directory (everyone in the organisation, plus shared domain contacts), not just search results. The first download happens automatically; after that only changes are fetched, every six hours. Browse and search it offline, and every colleague appears in address autocomplete. A Refresh button re-downloads it on demand.
+- If your organisation doesn't share its directory with apps, People explains which Admin console setting controls it.
+- New logo: a modern "D"-shaped envelope with an amber new-mail dot, used for the app, installer, taskbar, notification area, title bar and welcome screen.
+
 ## 1.0.2 — 2026-10-22
 
 - Fixed: deleting a message from any folder other than the inbox left it in the folder. Binned and spam mail is now hidden from every folder except Bin and Spam (as in Gmail), and folder counts match.
@@ -8,7 +14,7 @@
 - New mail is now a split button — one click for a new email, the arrow for other new items — replacing the separate "New items" arrow.
 - Classic ribbon: every button has the same height with icons on one line, and dropdown arrows sit beside the label instead of underneath.
 - Search box simply says "Search mail"; welcome text reworded.
-- New logo: an envelope closed with a brass "D" wax seal, used for the app, installer, taskbar, notification area and title bar.
+- New logo (see 1.0.3).
 
 ## 1.0.1 — 2026-10-22
 

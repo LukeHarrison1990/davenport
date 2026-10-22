@@ -107,6 +107,9 @@ export interface Api {
   'people.list'(accountId: string | 'all', groupId?: string): Contact[];
   'people.search'(q: string, limit?: number): Contact[];
   'people.directory'(accountId: string, q: string): Contact[];
+  'people.directoryList'(accountId: string): Contact[];
+  'people.directoryStatus'(accountId: string): { count: number; error?: string };
+  'people.syncDirectory'(accountId: string): number;
   'people.groups'(accountId: string | 'all'): ContactGroup[];
   'people.save'(c: Contact): Contact;
   'people.delete'(accountId: string, id: string): void;

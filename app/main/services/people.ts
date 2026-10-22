@@ -1,6 +1,6 @@
 // Google Contacts (People API): your contacts, "other contacts" for autocomplete, and the Workspace directory.
 import type { Contact, ContactGroup } from '../../shared/types';
-import { all, get, run, tx, uid } from '../db';
+import { all, get, kvGet, kvSet, run, tx, uid } from '../db';
 import { changed } from '../events';
 import { GoogleApiError } from '../google/http';
 import { client, isDemo, listAccounts } from './accounts';
@@ -141,6 +141,80 @@ export function search(q: string, limit = 8): Contact[] {
     }
   }
   return out.slice(0, limit);
+}
+
+const DIR_MASK = 'names,emailAddresses,phoneNumbers,organizations,photos,addresses';
+const DIR_SOURCES = ['DIRECTORY_SOURCE_TYPE_DOMAIN_PROFILE', 'DIRECTORY_SOURCE_TYPE_DOMAIN_CONTACT'];
+
+/**
+ * Downloads the whole Workspace directory (everyone in the organisation, plus shared domain contacts).
+ * The first run lists everything; later runs use Google's sync token to fetch only changes.
+ */
+export async function syncDirectory(accountId: string, full = false): Promise<number> {
+  if (isDemo(accountId)) return 0;
+  const isWorkspace = get<{ is_workspace: number }>('SELECT is_workspace FROM accounts WHERE id = ?', accountId)?.is_workspace;
+  if (!isWorkspace) return 0;
+  const c = client(accountId);
+  let syncToken = full ? undefined : kvGet<string>('dirSync', accountId);
+  type Page = { people?: (GPerson & { metadata?: { deleted?: boolean } })[]; nextPageToken?: string; nextSyncToken?: string };
+  const fetchAll = async (token?: string) => {
+    const people: Page['people'] = [];
+    let pageToken: string | undefined;
+    let next: string | undefined;
+    for (let i = 0; i < 200; i++) {
+      const r = await c.get<Page>(PEOPLE + '/people:listDirectoryPeople', {
+        readMask: DIR_MASK,
+        sources: DIR_SOURCES,
+        pageSize: 1000,
+        pageToken,
+        requestSyncToken: true,
+        syncToken: token
+      });
+      people.push(...(r.people ?? []));
+      next = r.nextSyncToken ?? next;
+      pageToken = r.nextPageToken;
+      if (!pageToken) break;
+    }
+    return { people, next };
+  };
+  let res;
+  try {
+    res = await fetchAll(syncToken);
+  } catch (e) {
+    if (syncToken && e instanceof GoogleApiError && (e.status === 400 || e.status === 410)) {
+      syncToken = undefined; // token expired (after about a week): download everything again
+      res = await fetchAll();
+    } else if (e instanceof GoogleApiError && e.status === 403) {
+      kvSet('dirError', accountId, e.message);
+      return 0; // the organisation doesn't share its directory with apps
+    } else throw e;
+  }
+  tx(() => {
+    if (!syncToken) run("DELETE FROM contacts WHERE account_id = ? AND source = 'directory'", accountId);
+    for (const p of res.people ?? []) {
+      if (p.metadata?.deleted) {
+        run("DELETE FROM contacts WHERE account_id = ? AND id = ? AND source = 'directory'", accountId, p.resourceName);
+        continue;
+      }
+      const ct = fromPerson(accountId, p, 'directory');
+      if (ct.emails.length || ct.name !== '(No name)') store(ct);
+    }
+  });
+  if (res.next) kvSet('dirSync', accountId, res.next);
+  kvSet('dirError', accountId, null);
+  changed('people', accountId);
+  return res.people?.length ?? 0;
+}
+
+export function directoryList(accountId: string): Contact[] {
+  return all<{ json: string }>("SELECT json FROM contacts WHERE account_id = ? AND source = 'directory' ORDER BY name COLLATE NOCASE", accountId).map(
+    (r) => JSON.parse(r.json) as Contact
+  );
+}
+
+export function directoryStatus(accountId: string): { count: number; error?: string } {
+  const count = get<{ n: number }>("SELECT COUNT(*) AS n FROM contacts WHERE account_id = ? AND source = 'directory'", accountId)?.n ?? 0;
+  return { count, error: kvGet<string | null>('dirError', accountId) ?? undefined };
 }
 
 export async function directory(accountId: string, q: string): Promise<Contact[]> {

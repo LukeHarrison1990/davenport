@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <defs>
+    <linearGradient id="a-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3D7BF7"/><stop offset="1" stop-color="#2335B8"/>
+    </linearGradient>
+    <linearGradient id="a-flap" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#DCE6FF"/>
+    </linearGradient>
+  </defs>
+  <!-- D-shaped body: straight left edge, round right side -->
+  <path d="M40 36h88a92 92 0 0 1 0 184H40a12 12 0 0 1-12-12V48a12 12 0 0 1 12-12z" fill="url(#a-bg)"/>
+  <!-- envelope flap folding across the D -->
+  <path d="M28 64l84 62a24 24 0 0 0 28 0l58-43" fill="none" stroke="url(#a-flap)" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="196" cy="60" r="22" fill="#FFB547"/>
+</svg>

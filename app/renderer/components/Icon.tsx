@@ -117,19 +117,25 @@ export function Icon({ name, size = 16, className, title, strokeWidth = 1.6, fil
   );
 }
 
-/** Davenport's mark: an envelope closed with a brass "D" wax seal. */
+/** Davenport's mark: an envelope shaped as a "D", with an amber new-mail dot.
+ *  `tile` draws the full-colour app icon; otherwise a white version for the coloured title bar. */
 export function Logo({ size = 22, tile = false }: { size?: number; tile?: boolean }) {
+  const id = tile ? 'dav-logo-c' : 'dav-logo-w';
   return (
-    <svg width={size} height={size} viewBox="0 0 64 64" aria-hidden>
-      {tile && <rect width="64" height="64" rx="14" fill="#1F3A5F" />}
-      <g transform={tile ? undefined : 'translate(-5 -6) scale(1.16)'}>
-        <rect x="9" y="17" width="46" height="32" rx="4.5" fill="#FFFFFF" />
-        <path d="M10.5 47.5L26 37.2M53.5 47.5L38 37.2" stroke="#C8D4E4" strokeWidth="1.8" strokeLinecap="round" />
-        <path d="M9.8 18.6L32 36.2L54.2 18.6z" fill="#DEE6F1" stroke="#B0C1D8" strokeWidth="1.6" strokeLinejoin="round" />
-        <circle cx="32" cy="36.2" r="8.2" fill="#C9A15C" />
-        <circle cx="32" cy="36.2" r="6.6" fill="none" stroke="#AA803E" strokeWidth="1.1" />
-        <path d="M29.7 32.1v8.2M29.7 32.1a4.1 4.1 0 0 1 0 8.2" fill="none" stroke="#5C401A" strokeWidth="1.8" strokeLinecap="round" />
-      </g>
+    <svg width={size} height={size} viewBox="0 0 256 256" aria-hidden>
+      <defs>
+        <linearGradient id={id + '-bg'} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor={tile ? '#3D7BF7' : '#FFFFFF'} />
+          <stop offset="1" stopColor={tile ? '#2335B8' : '#DCE6F5'} />
+        </linearGradient>
+        <linearGradient id={id + '-flap'} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor={tile ? '#FFFFFF' : '#3D6FD8'} />
+          <stop offset="1" stopColor={tile ? '#DCE6FF' : '#2A4FB0'} />
+        </linearGradient>
+      </defs>
+      <path d="M40 36h88a92 92 0 0 1 0 184H40a12 12 0 0 1-12-12V48a12 12 0 0 1 12-12z" fill={`url(#${id}-bg)`} />
+      <path d="M28 64l84 62a24 24 0 0 0 28 0l58-43" fill="none" stroke={`url(#${id}-flap)`} strokeWidth="22" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx="196" cy="60" r="22" fill="#FFB547" />
     </svg>
   );
 }

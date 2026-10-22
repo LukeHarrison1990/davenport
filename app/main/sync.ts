@@ -4,7 +4,7 @@ import { powerMonitor } from 'electron';
 import { listAccounts, setStatus } from './services/accounts';
 import { checkSnoozes, kickOutbox, syncMail } from './services/mail';
 import { checkReminders, syncCalendar } from './services/calendar';
-import { syncPeople } from './services/people';
+import { syncDirectory, syncPeople } from './services/people';
 import { syncTasks } from './services/tasks';
 import { syncChat } from './services/chat';
 import { getSettings } from './settings';
@@ -34,11 +34,13 @@ async function guard(accountId: string, what: string, fn: () => Promise<void>): 
 export async function syncAccount(accountId: string, full = false): Promise<void> {
   const a = listAccounts().find((x) => x.id === accountId);
   if (!a || a.kind !== 'google' || a.status === 'reauth') return;
-  if (full) for (const k of ['cal', 'people', 'tasks', 'chat']) last.delete(`${k}|${accountId}`);
+  if (full) for (const k of ['cal', 'people', 'tasks', 'chat', 'dir']) last.delete(`${k}|${accountId}`);
   await guard(accountId, 'mail', () => syncMail(accountId));
   if (due(`cal|${accountId}`, 5 * 60_000)) await guard(accountId, 'calendar', () => syncCalendar(accountId));
   if (due(`tasks|${accountId}`, 5 * 60_000)) await guard(accountId, 'tasks', () => syncTasks(accountId));
   if (due(`people|${accountId}`, 30 * 60_000)) await guard(accountId, 'people', () => syncPeople(accountId));
+  // The organisation directory changes slowly: refresh it every six hours (only changes are downloaded).
+  if (a.isWorkspace && due(`dir|${accountId}`, 6 * 3600_000)) await guard(accountId, 'directory', () => syncDirectory(accountId).then(() => undefined));
   if (a.chatEnabled && due(`chat|${accountId}`, 30_000)) await guard(accountId, 'chat', () => syncChat(accountId));
   updateBadge();
 }

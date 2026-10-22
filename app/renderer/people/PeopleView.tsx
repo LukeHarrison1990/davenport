@@ -26,18 +26,36 @@ export function PeopleView() {
     return () => window.removeEventListener('dav:new-contact', onNew);
   });
 
+  const dirAccount = source.kind === 'directory' ? source.accountId : '';
+  const [dirStatus, reloadDirStatus] = useLive(
+    () => (dirAccount ? call('people.directoryStatus', dirAccount) : Promise.resolve({ count: 0 } as { count: number; error?: string })),
+    ['people'],
+    [dirAccount],
+    { count: 0 } as { count: number; error?: string }
+  );
+  const [dirBusy, setDirBusy] = useState(false);
   useEffect(() => {
-    if (source.kind !== 'directory') return;
-    const t = setTimeout(() => {
-      call('people.directory', source.accountId, search || 'a').then(setDirResults).catch(fail);
-    }, 250);
-    return () => clearTimeout(t);
-  }, [source, search]);
+    if (!dirAccount) return;
+    void call('people.directoryList', dirAccount).then(setDirResults).catch(fail);
+  }, [dirAccount, dirStatus.count]);
+  const downloadDirectory = async () => {
+    if (!dirAccount) return;
+    setDirBusy(true);
+    try {
+      const n = await call('people.syncDirectory', dirAccount);
+      notify(n ? `Downloaded ${n.toLocaleString()} people from your organisation.` : 'Your organisation directory is up to date.');
+      reloadDirStatus();
+    } catch (e) {
+      fail(e);
+    } finally {
+      setDirBusy(false);
+    }
+  };
 
   const list = useMemo(() => {
     const base = source.kind === 'directory' ? dirResults : contacts;
     const q = search.toLowerCase();
-    return q && source.kind !== 'directory' ? base.filter((c) => c.name.toLowerCase().includes(q) || c.emails.some((e) => e.toLowerCase().includes(q)) || (c.company ?? '').toLowerCase().includes(q)) : base;
+    return q ? base.filter((c) => c.name.toLowerCase().includes(q) || c.emails.some((e) => e.toLowerCase().includes(q)) || (c.company ?? '').toLowerCase().includes(q)) : base;
   }, [contacts, dirResults, search, source.kind]);
 
   const startNew = () => setEditing({ accountId: accounts[0]?.id ?? '', id: '', name: '', emails: [''], phones: [''], groups: [], source: 'contacts' });
@@ -104,7 +122,17 @@ export function PeopleView() {
           ))}
         </nav>
         <section className="people-list" aria-label="People">
-          <div className="list-head"><span className="title">{source.kind === 'all' ? 'All contacts' : source.kind === 'group' ? source.name : 'Organisation directory'}</span></div>
+          <div className="list-head">
+            <span className="title">{source.kind === 'all' ? 'All contacts' : source.kind === 'group' ? source.name : 'Organisation directory'}</span>
+            {source.kind === 'directory' && (
+              <>
+                <span className="spacer" />
+                <button className="ghost" onClick={downloadDirectory} disabled={dirBusy} title="Download the whole directory again">
+                  <Icon name="sync" size={14} /> {dirBusy ? 'Downloading…' : 'Refresh'}
+                </button>
+              </>
+            )}
+          </div>
           <div className="list-scroll">
             {letters.map(([l, cs]) => (
               <div key={l}>
@@ -120,14 +148,19 @@ export function PeopleView() {
                 ))}
               </div>
             ))}
-            {!list.length && <Empty icon="people" title={source.kind === 'directory' ? 'Search your organisation' : 'No contacts'} text={source.kind === 'directory' ? 'Type a name in the search box.' : undefined} />}
+            {!list.length && source.kind === 'directory' && !search && (
+              <Empty icon="building" title={dirStatus.error ? "Your organisation's directory isn't available" : 'Directory not downloaded yet'} text={dirStatus.error ? 'Your Google Workspace admin may have turned off directory sharing (Admin console › Directory › Directory settings › Sharing settings › Contact sharing).' : 'Davenport downloads everyone in your organisation so you can browse and address them offline.'}>
+                <button className="btn primary" onClick={downloadDirectory} disabled={dirBusy}>{dirBusy ? 'Downloading…' : 'Download directory now'}</button>
+              </Empty>
+            )}
+            {!list.length && (source.kind !== 'directory' || search) && <Empty icon="people" title={search ? 'No matches' : 'No contacts'} />}
           </div>
         </section>
         <div className="detail">
           {editing ? <ContactEditor c={editing} groups={groups} onDone={(saved) => { setEditing(null); if (saved) setSelected(saved); }} /> : selected ? <ContactCard c={selected} groups={groups} /> : <Empty icon="person" title="Select a person" />}
         </div>
       </div>
-      <StatusBar left={<span>{list.length} people</span>} />
+      <StatusBar left={<span>{list.length.toLocaleString()} people{source.kind === 'directory' && dirStatus.count ? ' in your organisation' : ''}</span>} />
     </>
   );
 }
