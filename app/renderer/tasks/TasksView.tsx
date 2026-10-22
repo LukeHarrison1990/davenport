@@ -11,7 +11,7 @@ import { cx, fromLocalInput, startOfDay, toLocalInput } from '../util';
 type Sel = { kind: 'myday' } | { kind: 'list'; list: TaskList };
 
 export function TasksView() {
-  const { accounts, setModule, openFolder, select } = useApp();
+  const { accounts, setModule, openFolder, select, search, setSearch } = useApp();
   const [lists] = useLive(() => call('tasks.lists'), ['tasks'], [], [] as TaskList[]);
   const [sel, setSel] = useState<Sel>({ kind: 'myday' });
   const [showDone, setShowDone] = useState(false);
@@ -24,8 +24,10 @@ export function TasksView() {
     [] as Task[]
   );
   const today = startOfDay(Date.now());
-  const open = tasks.filter((t) => !t.completed);
-  const done = tasks.filter((t) => t.completed);
+  const q = search.toLowerCase();
+  const shown = q ? tasks.filter((t) => t.title.toLowerCase().includes(q) || (t.notes ?? '').toLowerCase().includes(q)) : tasks;
+  const open = shown.filter((t) => !t.completed);
+  const done = shown.filter((t) => t.completed);
 
   const add = async () => {
     const t = title.trim();
@@ -55,7 +57,7 @@ export function TasksView() {
 
   return (
     <>
-      <TitleBar placeholder="Search tasks" onSearch={() => undefined} />
+      <TitleBar placeholder="Search tasks" onSearch={setSearch} />
       <Ribbon groups={[
         { label: 'New', buttons: [
           { label: 'New task', icon: 'plus', primary: true, onClick: () => document.getElementById('task-new')?.focus() },

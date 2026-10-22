@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.5 — 2026-10-22
+
+- Ctrl+A in Mail selects every message in the current folder wherever the focus is (outside a text box), instead of highlighting the window's text. The window's own labels can no longer be highlighted by accident; email bodies, contact details and anything you type remain selectable.
+- Search updates as you type (a moment after you pause), in Mail, Calendar, People, Chat and now Tasks. Enter still searches immediately; the down arrow moves from the search box into the results.
+- Switching between Mail, Calendar, People, Chat and Tasks clears the search box.
+
 ## 1.0.4 — 2026-10-22
 
 - Settings keeps the same size and position whichever section you open; long sections scroll inside the window.

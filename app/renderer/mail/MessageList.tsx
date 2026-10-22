@@ -98,6 +98,20 @@ export function MessageList({ folders, position, height }: { folders: Folder[]; 
     }
   };
 
+  const listRef = useRef(list);
+  listRef.current = list;
+  useEffect(() => {
+    const all = () => {
+      const l = listRef.current;
+      if (!l.length) return;
+      select(l.map((m) => ({ accountId: m.accountId, id: m.id, threadId: m.threadId })));
+      anchor.current = 0;
+      scroller.current?.focus();
+    };
+    window.addEventListener('dav:select-all', all);
+    return () => window.removeEventListener('dav:select-all', all);
+  }, [select]);
+
   const onKey = (e: React.KeyboardEvent) => {
     if (!list.length) return;
     const cur = list.findIndex((m) => selIds.has(m.accountId + m.id));
@@ -121,6 +135,7 @@ export function MessageList({ folders, position, height }: { folders: Folder[]; 
       scroller.current?.querySelector(`[data-index="${n}"]`)?.scrollIntoView({ block: 'nearest' });
     } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
       e.preventDefault();
+      e.stopPropagation();
       select(toSel(list));
     } else if (e.key === 'Enter' && selected.length === 1) {
       const s = selected[0];

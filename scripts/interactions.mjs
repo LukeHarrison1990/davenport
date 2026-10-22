@@ -67,13 +67,26 @@ await check('Other tab lists promotions', async () => {
 });
 
 await check('search filters the list', async () => {
-  await win.locator('#global-search').fill('pivot');
-  await win.locator('#global-search').press('Enter');
-  await win.locator('#message-list .row', { hasText: 'advanced Sheets' }).waitFor({ timeout: 3000 });
-  const n = await win.locator('#message-list .row').count();
+  await win.locator('#global-search').pressSequentially('pivot', { delay: 40 });
+  await win.locator('#message-list .row', { hasText: 'advanced Sheets' }).waitFor({ timeout: 3000 }); // no Enter needed
+  let n = 0;
+  for (let i = 0; i < 20 && (n = await win.locator('#message-list .row').count()) !== 1; i++) await win.waitForTimeout(100);
   if (n !== 1) throw new Error('expected 1 result, got ' + n);
   await win.locator('#global-search').fill('');
   await win.locator('#global-search').press('Escape');
+});
+
+await check('Ctrl+A with nothing selected selects every message, not the window text', async () => {
+  await win.locator('.folder', { hasText: 'Inbox' }).first().click();
+  await win.locator('.folder', { hasText: 'Inbox' }).first().focus();
+  await win.keyboard.press('Control+A');
+  await win.waitForTimeout(300);
+  const rows = await win.locator('#message-list .row').count();
+  const picked = await win.locator('#message-list .row[aria-selected="true"]').count();
+  const text = await win.evaluate(() => window.getSelection()?.toString() ?? '');
+  if (picked !== rows || rows === 0) throw new Error(`selected ${picked} of ${rows}`);
+  if (text.trim()) throw new Error('window text was selected: ' + text.slice(0, 40));
+  await win.locator('#message-list .row').first().click();
 });
 
 await check('inline reply, send with undo window, message appears in Sent', async () => {

@@ -98,7 +98,10 @@ a { color: var(--accent); }
 ::-webkit-scrollbar-track { background: transparent; }
 
 /* ---------- App shell ---------- */
-.app { height: 100vh; display: flex; flex-direction: column; }
+.app { height: 100vh; display: flex; flex-direction: column; user-select: none; }
+/* The window's own labels aren't selectable; content people may want to copy is. */
+.app input, .app textarea, .app .editor, .app .reading-inner, .app .detail, .app .cmsg p, .app .peek, .app .task-item .n,
+.app .side-panel p, .app .dialog .content p, .app .hint-text, .app .list-box .sub { user-select: text; }
 .titlebar {
   height: 44px; flex: 0 0 44px; display: flex; align-items: center; gap: 16px; padding: 0 16px;
   background: var(--title-bar); color: var(--title-ink); -webkit-app-region: drag; user-select: none;

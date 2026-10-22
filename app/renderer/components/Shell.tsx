@@ -10,7 +10,28 @@ export function TitleBar({ placeholder, onSearch }: { placeholder: string; onSea
   const { accounts, search, setSearch, openDialog } = useApp();
   const [text, setText] = useState(search);
   const ref = useRef<HTMLInputElement>(null);
-  useEffect(() => setText(search), [search]);
+  const pushed = useRef(search);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Follow changes made elsewhere (e.g. the Filter menu), but never overwrite what's being typed.
+  useEffect(() => {
+    if (search !== pushed.current) {
+      pushed.current = search;
+      setText(search);
+    }
+  }, [search]);
+  useEffect(() => () => {
+    if (timer.current) clearTimeout(timer.current);
+  }, []);
+  // Search as you type: results update a moment after you stop typing.
+  const apply = (q: string, delay: number) => {
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => {
+      timer.current = null;
+      pushed.current = q.trim();
+      setSearch(q.trim());
+      onSearch?.(q.trim());
+    }, delay);
+  };
   useEffect(() => {
     const focus = () => ref.current?.focus();
     window.addEventListener('dav:focus-search', focus);
@@ -38,8 +59,7 @@ export function TitleBar({ placeholder, onSearch }: { placeholder: string; onSea
           role="search"
           onSubmit={(e) => {
             e.preventDefault();
-            setSearch(text);
-            onSearch(text);
+            apply(text, 0);
           }}
         >
           <Icon name="search" />
@@ -52,17 +72,22 @@ export function TitleBar({ placeholder, onSearch }: { placeholder: string; onSea
             value={text}
             onChange={(e) => {
               setText(e.target.value);
-              if (!e.target.value) {
-                setSearch('');
-                onSearch('');
-              }
+              apply(e.target.value, e.target.value ? 220 : 0);
             }}
             onKeyDown={(e) => {
               if (e.key === 'Escape') {
                 setText('');
-                setSearch('');
-                onSearch('');
+                apply('', 0);
                 (e.target as HTMLInputElement).blur();
+              }
+              // Down arrow moves from the search box into the results.
+              if (e.key === 'ArrowDown') {
+                const list = document.getElementById('message-list');
+                if (list) {
+                  e.preventDefault();
+                  list.focus();
+                  list.dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true }));
+                }
               }
             }}
           />

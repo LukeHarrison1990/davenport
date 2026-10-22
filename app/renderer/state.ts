@@ -52,7 +52,7 @@ export const useApp = create<State>((set, get) => ({
   dialog: null,
   dialogArg: undefined,
   toasts: [],
-  setModule: (module) => set({ module }),
+  setModule: (module) => set(module === get().module ? { module } : { module, search: '' }),
   setAccounts: (accounts) => {
     const cur = get().mail;
     // If the selected account went away, fall back to the unified inbox.

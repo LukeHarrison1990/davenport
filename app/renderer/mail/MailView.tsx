@@ -51,6 +51,12 @@ export function MailView() {
       if (ctrl && !e.shiftKey && k === 'n') { e.preventDefault(); void newMail(); return; }
       if (ctrl && k === 'e') { e.preventDefault(); window.dispatchEvent(new Event('dav:focus-search')); return; }
       if (typing) return;
+      if (ctrl && !e.shiftKey && k === 'a') {
+        // Select every message in the current folder, as Outlook does, rather than the window's text.
+        e.preventDefault();
+        window.dispatchEvent(new Event('dav:select-all'));
+        return;
+      }
       const sel = useApp.getState().selected;
       if (ctrl && e.shiftKey && k === 'r') { e.preventDefault(); void respond(sel, 'replyAll'); }
       else if (ctrl && k === 'r') { e.preventDefault(); void respond(sel, 'reply'); }
