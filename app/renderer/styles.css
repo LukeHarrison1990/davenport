@@ -352,7 +352,11 @@ textarea.input { min-height: 90px; resize: vertical; font-family: var(--font); }
 .tabs-row { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 14px; }
 .tabs-row button { border: 0; background: transparent; padding: 8px 12px; color: var(--muted); border-bottom: 2px solid transparent; }
 .tabs-row button[aria-selected='true'] { color: var(--text); font-weight: 600; border-bottom-color: var(--accent); }
-.settings { display: flex; min-height: 460px; }
+.settings { display: flex; height: 100%; min-height: 0; }
+.dialog.settings-dialog { width: min(880px, 100%); height: min(640px, calc(100vh - 48px)); }
+.dialog.settings-dialog .content { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; padding-bottom: 0; }
+.dialog.settings-dialog .settings section { overflow-y: auto; }
+.dialog.settings-dialog .settings nav { flex-shrink: 0; overflow-y: auto; }
 .settings nav { flex: 0 0 180px; border-right: 1px solid var(--border-soft); padding: 8px; }
 .settings nav button { display: block; width: 100%; text-align: left; border: 0; background: transparent; padding: 8px 10px; border-radius: 6px; }
 .settings nav button[aria-current='true'] { background: var(--accent-soft); font-weight: 600; }

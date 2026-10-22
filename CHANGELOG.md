@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.4 — 2026-10-22
+
+- Settings keeps the same size and position whichever section you open; long sections scroll inside the window.
+- The Settings button in the sidebar is now a gear instead of a sun-like icon.
+
 ## 1.0.3 — 2026-10-22
 
 - People: Davenport now downloads your whole Google Workspace directory (everyone in the organisation, plus shared domain contacts), not just search results. The first download happens automatically; after that only changes are fetched, every six hours. Browse and search it offline, and every colleague appears in address autocomplete. A Refresh button re-downloads it on demand.

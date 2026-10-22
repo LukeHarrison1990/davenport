@@ -135,7 +135,7 @@ export function SettingsDialog({ arg, onClose }: { arg?: unknown; onClose: () =>
   );
 
   return (
-    <Dialog title="Settings" wide onClose={onClose}>
+    <Dialog title="Settings" wide className="settings-dialog" onClose={onClose}>
       <div className="settings">
         <nav aria-label="Settings sections">
           {nav('accounts', 'Accounts')}

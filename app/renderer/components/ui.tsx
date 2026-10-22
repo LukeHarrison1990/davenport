@@ -5,7 +5,7 @@ import { useApp } from '../state';
 import { avatarColours, initials } from '../util';
 import { Icon } from './Icon';
 
-export function Dialog({ title, onClose, children, footer, wide }: { title: string; onClose: () => void; children: ReactNode; footer?: ReactNode; wide?: boolean }) {
+export function Dialog({ title, onClose, children, footer, wide, className }: { title: string; onClose: () => void; children: ReactNode; footer?: ReactNode; wide?: boolean; className?: string }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const prev = document.activeElement as HTMLElement | null;
@@ -25,7 +25,7 @@ export function Dialog({ title, onClose, children, footer, wide }: { title: stri
   }, [onClose]);
   return (
     <div className="backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className={'dialog' + (wide ? ' wide' : '')} role="dialog" aria-modal="true" aria-label={title} ref={ref}>
+      <div className={'dialog' + (wide ? ' wide' : '') + (className ? ' ' + className : '')} role="dialog" aria-modal="true" aria-label={title} ref={ref}>
         <header>
           <h2>{title}</h2>
           <button className="icon-btn" aria-label="Close" onClick={onClose}>
