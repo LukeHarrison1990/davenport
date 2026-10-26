@@ -199,8 +199,8 @@ export function MessageList({ folders, position, height }: { folders: Folder[]; 
       <div className="list-head">
         {showTabs ? (
           <div role="tablist" aria-label="Inbox view" style={{ display: 'flex' }}>
-            <button className="tab" role="tab" aria-selected={tab === 'focused'} onClick={() => setTab('focused')} title={settings.focusedInbox === 'important' ? 'Mail Gmail marks as important' : 'Mail in Gmail’s Primary category'}>Focused</button>
-            <button className="tab" role="tab" aria-selected={tab === 'other'} onClick={() => setTab('other')} title={settings.focusedInbox === 'important' ? 'Everything Gmail doesn’t mark as important' : 'Social, Promotions, Updates and Forums'}>Standard</button>
+            <button className="tab" role="tab" aria-selected={tab === 'focused'} onClick={() => setTab('focused')} title={settings.focusedInbox === 'important' ? 'Mail Gmail marks as important' : 'Mail in Gmail’s Primary category'}>{settings.focusedInbox === 'important' ? 'Important' : 'Primary'}</button>
+            <button className="tab" role="tab" aria-selected={tab === 'other'} onClick={() => setTab('other')} title={settings.focusedInbox === 'important' ? 'Everything Gmail doesn’t mark as important' : 'Social, Promotions, Updates and Forums'}>Other</button>
           </div>
         ) : (
           <span className="title">{search ? `Results for “${search}”` : mail.folderName}</span>
@@ -216,7 +216,7 @@ export function MessageList({ folders, position, height }: { folders: Folder[]; 
             openMenu(
               [
                 { label: 'Show as conversations', checked: settings.conversationView, onClick: () => useApp.getState().updateSettings({ conversationView: !settings.conversationView }) },
-                { label: 'Focused Inbox', checked: settings.focusedInbox !== 'off', onClick: () => useApp.getState().updateSettings({ focusedInbox: settings.focusedInbox === 'off' ? 'categories' : 'off' }) },
+                { label: 'Inbox tabs', checked: settings.focusedInbox !== 'off', onClick: () => useApp.getState().updateSettings({ focusedInbox: settings.focusedInbox === 'off' ? 'categories' : 'off' }) },
                 { sep: true },
                 { label: 'Reading pane on the right', checked: settings.readingPane === 'right', onClick: () => useApp.getState().updateSettings({ readingPane: 'right' }) },
                 { label: 'Reading pane at the bottom', checked: settings.readingPane === 'bottom', onClick: () => useApp.getState().updateSettings({ readingPane: 'bottom' }) },

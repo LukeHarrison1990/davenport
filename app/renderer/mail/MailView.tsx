@@ -183,7 +183,7 @@ export function MailView() {
         { label: 'Reading pane', icon: 'pane', menu: () => (['right', 'bottom', 'off'] as const).map((p) => ({ label: p === 'off' ? 'Off' : p === 'right' ? 'Right' : 'Bottom', checked: settings.readingPane === p, onClick: () => updateSettings({ readingPane: p }) })) },
         { label: 'To-Do bar', icon: 'tasks', onClick: () => updateSettings({ todoBar: !settings.todoBar }) },
         { label: 'Conversations', icon: 'thread', onClick: () => updateSettings({ conversationView: !settings.conversationView }) },
-        { label: 'Focused Inbox', icon: 'inbox', onClick: () => updateSettings({ focusedInbox: settings.focusedInbox === 'off' ? 'categories' : 'off' }) }
+        { label: 'Inbox tabs', icon: 'inbox', title: 'Split the inbox into Primary and Other', onClick: () => updateSettings({ focusedInbox: settings.focusedInbox === 'off' ? 'categories' : 'off' }) }
       ] },
       { label: 'Appearance', buttons: [
         { label: 'Theme', icon: 'brightness', menu: () => (['system', 'light', 'dark'] as const).map((t) => ({ label: t === 'system' ? 'Follow Windows' : t[0].toUpperCase() + t.slice(1), checked: settings.theme === t, onClick: () => updateSettings({ theme: t }) })) },

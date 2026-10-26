@@ -60,10 +60,10 @@ await check('open message shows body in sandboxed frame', async () => {
   if (!/revised Q4 figures/.test(text)) throw new Error('body text missing: ' + text.slice(0, 80));
 });
 
-await check('Standard tab lists promotions', async () => {
-  await win.getByRole('tab', { name: 'Standard' }).click();
+await check('Other tab lists promotions', async () => {
+  await win.getByRole('tab', { name: 'Other' }).click();
   await win.locator('#message-list .row', { hasText: 'desk chairs' }).waitFor({ timeout: 3000 });
-  await win.getByRole('tab', { name: 'Focused' }).click();
+  await win.getByRole('tab', { name: 'Primary' }).click();
 });
 
 await check('search filters the list', async () => {

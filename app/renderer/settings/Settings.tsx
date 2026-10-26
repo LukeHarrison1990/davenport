@@ -241,10 +241,10 @@ export function SettingsDialog({ arg, onClose }: { arg?: unknown; onClose: () =>
               </div>
               <label className="check"><input type="checkbox" checked={settings.conversationView} onChange={(e) => updateSettings({ conversationView: e.target.checked })} /> Show messages as conversations</label>
               <label className="check"><input type="checkbox" checked={settings.blockRemoteImages} onChange={(e) => updateSettings({ blockRemoteImages: e.target.checked })} /> Don't download pictures automatically (protects your privacy)</label>
-              <Field label="Focused Inbox">
+              <Field label="Inbox tabs">
                 <select className="input" value={settings.focusedInbox} onChange={(e) => updateSettings({ focusedInbox: e.target.value as never })}>
-                  <option value="categories">On — Primary in Focused; Social, Promotions, Updates and Forums in Standard</option>
-                  <option value="important">On — mail Gmail marks as Important in Focused; the rest in Standard</option>
+                  <option value="categories">Primary and Other — Social, Promotions, Updates and Forums go in Other</option>
+                  <option value="important">Important and Other — uses Gmail's Important marker</option>
                   <option value="off">Off</option>
                 </select>
               </Field>

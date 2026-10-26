@@ -1,9 +1,13 @@
 # Changelog
 
+## 1.0.9 — 2026-10-26
+
+- The inbox tabs are now **Primary** and **Other**, matching Gmail's own name for the mail that lands in the first tab (Social, Promotions, Updates and Forums go in Other). If you choose to split by Gmail's Important marker instead, the first tab is called **Important**. The setting and the View button are now called "Inbox tabs".
+
 ## 1.0.8 — 2026-10-26
 
 - Send / Receive shows that it's working: the arrows turn, the status bar shows a progress bar with what's being fetched (Mail, Calendar, Tasks, Contacts, Directory, Chat, per account), and it says when it's finished. Pressing it again while it runs doesn't start a second one.
-- The Focused Inbox's second tab is now called **Standard**. Hovering over either tab shows what goes in it.
+- The Focused Inbox's second tab was renamed (see 1.0.9 for the final names). Hovering over either tab shows what goes in it.
 - Chat: conversations are grouped under each account (collapsible), like folders in Mail.
 - Chat status: set Automatic, Do not disturb (30 minutes to a week) or Away, plus a status message with an emoji and an end time. It's stored in Google, so it's the same in Chat on the web and phones, and changes made there show up in Davenport. Accounts that turned Chat on earlier get an **Allow status** button for the extra permission.
 - Chat: if Google says "Google Chat app not found" (the Cloud project's one-time Chat app details are missing, which Google requires for sending), Davenport now shows the steps to fix it in Chat, with a button to the right Google Cloud page. The setup guide has been updated to match.
