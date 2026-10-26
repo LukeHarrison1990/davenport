@@ -60,8 +60,8 @@ await check('open message shows body in sandboxed frame', async () => {
   if (!/revised Q4 figures/.test(text)) throw new Error('body text missing: ' + text.slice(0, 80));
 });
 
-await check('Other tab lists promotions', async () => {
-  await win.getByRole('tab', { name: 'Other' }).click();
+await check('Standard tab lists promotions', async () => {
+  await win.getByRole('tab', { name: 'Standard' }).click();
   await win.locator('#message-list .row', { hasText: 'desk chairs' }).waitFor({ timeout: 3000 });
   await win.getByRole('tab', { name: 'Focused' }).click();
 });
@@ -169,6 +169,13 @@ await check('bottom reading pane sits above the status bar', async () => {
   await api('settings.set', { readingPane: 'right' });
 });
 
+await check('Send / Receive shows progress, then says it finished', async () => {
+  await win.keyboard.press('F9');
+  await win.locator('.statusbar .sync-progress [role=progressbar]').waitFor({ timeout: 2000 });
+  if (!(await win.locator('.titlebar .sync .sync-icon.spinning').count())) throw new Error('title bar icon not spinning');
+  await win.locator('.statusbar', { hasText: 'Send/Receive complete' }).waitFor({ timeout: 6000 });
+});
+
 await check('New mail split button offers other items', async () => {
   await win.locator('.split-more').first().click();
   await win.getByRole('menuitem', { name: 'Event' }).waitFor();
@@ -270,6 +277,25 @@ await check('chat: send a message', async () => {
   await win.locator('#chat-input').fill('Yes — renewal is booked for the 8th.');
   await win.locator('#chat-input').press('Enter');
   await win.locator('.cmsg', { hasText: 'renewal is booked' }).waitFor({ timeout: 3000 });
+});
+
+await check('chat: conversations are grouped under each account', async () => {
+  const heads = await win.locator('.chat-account .account-heading .email').allTextContents();
+  if (!heads.includes('alex@northfield.example')) throw new Error('no account heading: ' + heads.join());
+  await win.locator('.chat-account', { hasText: 'alex@northfield.example' }).locator('.conv', { hasText: 'Website relaunch' }).waitFor();
+});
+
+await check('chat: set Do not disturb and a status message', async () => {
+  await win.locator('.presence-pill').first().click();
+  await win.getByRole('menuitem', { name: /Do not disturb/ }).click();
+  await win.getByRole('menuitem', { name: '1 hour' }).click();
+  await win.locator('.presence-pill', { hasText: 'Do not disturb' }).waitFor({ timeout: 3000 });
+  await win.locator('.custom-status').first().click();
+  await win.locator('.status-presets .preset', { hasText: 'Teaching' }).click();
+  await win.getByRole('button', { name: 'Save' }).click();
+  await win.locator('.custom-status', { hasText: 'Teaching' }).waitFor({ timeout: 3000 });
+  const st = (await api('chat.statuses')).find((x) => x.accountId === 'demo');
+  if (st.presence !== 'dnd' || st.customText !== 'Teaching' || !st.customUntil) throw new Error(JSON.stringify(st));
 });
 
 await check('people: create a contact', async () => {

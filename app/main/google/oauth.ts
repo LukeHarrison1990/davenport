@@ -27,7 +27,8 @@ export const CHAT_SCOPES = [
   'https://www.googleapis.com/auth/chat.messages',
   'https://www.googleapis.com/auth/chat.messages.reactions',
   'https://www.googleapis.com/auth/chat.memberships.readonly',
-  'https://www.googleapis.com/auth/chat.users.readstate'
+  'https://www.googleapis.com/auth/chat.users.readstate',
+  'https://www.googleapis.com/auth/chat.users.availability'
 ];
 
 export interface OAuthClient {

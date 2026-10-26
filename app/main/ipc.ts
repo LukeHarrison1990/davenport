@@ -17,7 +17,7 @@ import * as tasks from './services/tasks';
 import * as chat from './services/chat';
 import * as ooo from './services/outOfOffice';
 import { seedDemo } from './demo';
-import { manualSync, syncAccount } from './sync';
+import { manualSync, syncAccount, syncProgress } from './sync';
 import { openChildWindow, paramsFor, setTitleBarColour } from './windows';
 import { updateBadge } from './tray';
 
@@ -145,6 +145,7 @@ const impl: Impl = {
   'sync.now': (_c, id) => {
     void manualSync(id);
   },
+  'sync.progress': () => syncProgress(),
 
   'settings.get': () => getSettings(),
   'settings.set': (_c, patch) => {
@@ -284,7 +285,11 @@ const impl: Impl = {
   'chat.react': (_c, a, s, m, e) => chat.react(a, s, m, e),
   'chat.markRead': (_c, a, s) => chat.markRead(a, s),
   'chat.refresh': (_c, a, s) => chat.refresh(a, s),
-  'chat.openInBrowser': (_c, a, s) => chat.openInBrowser(a, s)
+  'chat.openInBrowser': (_c, a, s) => chat.openInBrowser(a, s),
+  'chat.statuses': () => chat.statuses(),
+  'chat.setPresence': (_c, a, mode, until) => chat.setPresence(a, mode, until),
+  'chat.setCustomStatus': (_c, a, text, emoji, until) => chat.setCustomStatus(a, text, emoji, until),
+  'chat.openSetup': (_c, a) => chat.openChatSetup(a)
 };
 
 export function registerIpc(): void {

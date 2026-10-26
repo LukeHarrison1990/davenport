@@ -11,7 +11,7 @@ import { cx, fromLocalInput, startOfDay, toLocalInput } from '../util';
 type Sel = { kind: 'myday' } | { kind: 'list'; list: TaskList };
 
 export function TasksView() {
-  const { accounts, setModule, openFolder, select, search, setSearch } = useApp();
+  const { accounts, setModule, openFolder, select, search, setSearch, syncProgress } = useApp();
   const [lists] = useLive(() => call('tasks.lists'), ['tasks'], [], [] as TaskList[]);
   const [sel, setSel] = useState<Sel>({ kind: 'myday' });
   const [showDone, setShowDone] = useState(false);
@@ -68,7 +68,7 @@ export function TasksView() {
         ] },
         { label: 'View', buttons: [
           { label: showDone ? 'Hide completed' : 'Show completed', icon: 'check', onClick: () => setShowDone(!showDone) },
-          { label: 'Refresh', icon: 'sync', onClick: () => call('sync.now') }
+          { label: 'Refresh', icon: 'sync', spin: syncProgress.active, onClick: () => call('sync.now') }
         ] }
       ]} />
       <div className="body">

@@ -30,6 +30,7 @@ export interface Api {
   'accounts.enableChat'(accountId: string): Account;
   'accounts.setColor'(accountId: string, color: string): void;
   'sync.now'(accountId?: string): void;
+  'sync.progress'(): import('./types').SyncProgress;
 
   // Settings
   'settings.get'(): Settings;
@@ -133,6 +134,10 @@ export interface Api {
   'chat.markRead'(accountId: string, spaceId: string): void;
   'chat.refresh'(accountId: string, spaceId?: string): void;
   'chat.openInBrowser'(accountId: string, spaceId: string): void;
+  'chat.statuses'(): import('./types').ChatStatus[];
+  'chat.setPresence'(accountId: string, mode: 'automatic' | 'away' | 'dnd', until?: number): void;
+  'chat.setCustomStatus'(accountId: string, text: string | null, emoji?: string, until?: number): void;
+  'chat.openSetup'(accountId: string): void;
 }
 
 export type ApiMethod = keyof Api;
@@ -145,4 +150,5 @@ export interface EngineEvents {
   toast: import('./types').Toast;
   navigate: { module: string; accountId?: string; id?: string; threadId?: string };
   syncStatus: { accountId: string; status: import('./types').AccountStatus; detail?: string };
+  syncProgress: import('./types').SyncProgress;
 }

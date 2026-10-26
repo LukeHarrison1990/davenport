@@ -199,8 +199,8 @@ export function MessageList({ folders, position, height }: { folders: Folder[]; 
       <div className="list-head">
         {showTabs ? (
           <div role="tablist" aria-label="Inbox view" style={{ display: 'flex' }}>
-            <button className="tab" role="tab" aria-selected={tab === 'focused'} onClick={() => setTab('focused')}>Focused</button>
-            <button className="tab" role="tab" aria-selected={tab === 'other'} onClick={() => setTab('other')}>Other</button>
+            <button className="tab" role="tab" aria-selected={tab === 'focused'} onClick={() => setTab('focused')} title={settings.focusedInbox === 'important' ? 'Mail Gmail marks as important' : 'Mail in Gmail’s Primary category'}>Focused</button>
+            <button className="tab" role="tab" aria-selected={tab === 'other'} onClick={() => setTab('other')} title={settings.focusedInbox === 'important' ? 'Everything Gmail doesn’t mark as important' : 'Social, Promotions, Updates and Forums'}>Standard</button>
           </div>
         ) : (
           <span className="title">{search ? `Results for “${search}”` : mail.folderName}</span>

@@ -6,7 +6,7 @@ import { Toasts } from './components/ui';
 import { MailView } from './mail/MailView';
 import { MoveDialog, NewFolderDialog, OutOfOfficeDialog, QuickStepsDialog, RulesDialog, SearchFolderDialog, SignatureDialog, TemplatesDialog } from './mail/dialogs';
 import { AboutDialog, SettingsDialog, Welcome } from './settings/Settings';
-import { notify, useApp, type Module } from './state';
+import { useApp, type Module } from './state';
 import { TitleBar } from './components/Shell';
 import { CalendarView, SubscribeDialog } from './calendar/CalendarView';
 import { PeopleView } from './people/PeopleView';
@@ -24,6 +24,7 @@ export function App() {
       loaded.current = true;
     });
     void loadAccounts();
+    void call('sync.progress').then((p) => useApp.getState().setSyncProgress(p));
     return onEngine({
       changed: (c) => {
         if (c.scope === 'accounts') void loadAccounts();
@@ -31,6 +32,7 @@ export function App() {
       },
       toast: (t) => pushToast(t),
       syncStatus: () => void loadAccounts(),
+      syncProgress: (p) => useApp.getState().setSyncProgress(p),
       navigate: (n) => {
         setModule(n.module as Module);
         if (n.module === 'mail' && n.accountId && n.id) {
@@ -76,7 +78,6 @@ export function App() {
       } else if (e.key === 'F9') {
         e.preventDefault();
         void call('sync.now');
-        notify('Checking for new items…');
       } else if (ctrl && e.key === ',') {
         e.preventDefault();
         openDialog('settings');

@@ -35,13 +35,21 @@ Tip for organisations: put the JSON file next to `Davenport.exe` (or in `%APPDAT
 
 ## 4. Google Chat (Workspace only)
 
-The Chat API needs a "Chat app" configuration even when you're only reading and sending your own messages:
+Reading Chat works as soon as the Chat API is switched on. Google also requires the project's "Chat app" details before an app can **send messages, add reactions or change your status**. Without them, Google answers *"Google Chat app not found"* and Davenport shows these steps in Chat:
 
-1. Open **APIs & Services › Google Chat API › Configuration**.
-2. Fill in an app name (*Davenport*), an avatar URL (any image URL) and a description.
-3. Under **Functionality** you can leave everything unticked. Under **Connection settings** choose **HTTP endpoint URL** and enter any `https://` address — it isn't used. Set visibility to yourself or your organisation and save.
+1. Open **APIs & Services › Google Chat API › Configuration** (in the same project as Davenport's OAuth client).
+2. Under **Application info**, enter:
+   - **App name**: *Davenport* (up to 25 letters and numbers)
+   - **Avatar URL**: an `https://` link to a square PNG or JPEG, 256×256 or bigger. Your organisation's logo from its website works, or Davenport's icon once the code is on GitHub (the "raw" link to `build/icon.png`).
+   - **Description**: e.g. *Desktop email and chat* (up to 40 characters)
+3. Leave **Enable interactive features** turned off. Davenport only uses the API, so no connection settings are needed.
+4. Click **Save**. It can take a minute or two to start working.
 
 Then in Davenport open **Settings › Accounts › Turn on Chat** and approve the extra permissions.
+
+### Chat status
+
+Davenport sets your Chat status (Automatic, Do not disturb, Away, and a status message) through Google's availability API, so it's the same status people see on the web and on phones. This uses the `chat.users.availability` permission. If you turned Chat on before Davenport 1.0.8, Chat shows an **Allow status** button that asks Google for it.
 
 ## What Davenport asks Google for
 
@@ -53,6 +61,6 @@ Then in Davenport open **Settings › Accounts › Turn on Chat** and approve th
 | Contacts, other contacts, directory | Address book, autocomplete, organisation directory |
 | Tasks (`tasks`) | To-Do bar and follow-up flags |
 | Drive files Davenport creates (`drive.file`) | Sharing large attachments as Drive links — Davenport can't see your other Drive files |
-| Chat (optional) | Spaces, messages, reactions, read state |
+| Chat (optional) | Spaces, messages, reactions, read state, your Chat status |
 
 You can remove access at any time from your Google Account's **Security › Third-party apps** page, or by removing the account in Davenport (which revokes the token).

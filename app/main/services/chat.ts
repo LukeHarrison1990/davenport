@@ -1,7 +1,7 @@
 // Google Chat: spaces, direct messages, threads and reactions (Workspace accounts with Chat enabled).
 import { shell } from 'electron';
-import type { ChatMessage, ChatSpace } from '../../shared/types';
-import { all, get, kvGet, kvSet, run, tx } from '../db';
+import type { ChatMessage, ChatSpace, ChatStatus } from '../../shared/types';
+import { all, get, kvDelete, kvGet, kvSet, run, tx } from '../db';
 import { changed } from '../events';
 import { GoogleApiError } from '../google/http';
 import { client, getAccount, isDemo, listAccounts } from './accounts';
@@ -9,6 +9,33 @@ import { notifyChat } from './notify';
 import { myPersonId } from './people';
 
 const CHAT = 'https://chat.googleapis.com/v1';
+const AVAILABILITY_SCOPE = 'https://www.googleapis.com/auth/chat.users.availability';
+
+/** The Google Cloud page where the one-time Chat app settings live. */
+export const CHAT_SETUP_URL = 'https://console.cloud.google.com/apis/api/chat.googleapis.com/hangouts-chat';
+
+// Google lets apps read Chat with just the API switched on, but sending, reacting or changing your status
+// also needs the project's "Chat app" details filled in. When they're missing, Google answers "Google Chat app not found".
+const isChatAppMissing = (e: unknown): boolean =>
+  e instanceof GoogleApiError && /chat app not found|configure the (chat )?app/i.test(e.message);
+
+async function needsChatApp<T>(accountId: string, fn: () => Promise<T>): Promise<T> {
+  try {
+    const r = await fn();
+    if (kvGet('chatSetup', accountId)) {
+      kvDelete('chatSetup', accountId);
+      changed('chat', accountId);
+    }
+    return r;
+  } catch (e) {
+    if (isChatAppMissing(e)) {
+      kvSet('chatSetup', accountId, true);
+      changed('chat', accountId);
+      throw new Error('Google needs one more setting in your Google Cloud project before Davenport can send Chat messages or change your status. The steps are shown in Chat.');
+    }
+    throw e;
+  }
+}
 
 interface GSpace {
   name: string;
@@ -97,6 +124,7 @@ export async function syncChat(accountId: string, notify = true): Promise<void> 
     }
     throw e;
   }
+  await fetchStatus(accountId).catch(() => undefined);
   const meId = await me(accountId);
   const prev = new Map(spaces(accountId).map((s) => [s.id, s]));
   for (const g of list) {
@@ -205,10 +233,12 @@ export async function send(accountId: string, spaceId: string, text: string, thr
       createTime: Date.now(), threadId: threadId ?? `${spaceId}/threads/t-${Date.now()}`, isThreadReply: !!threadId, attachments: [], reactions: [], mine: true
     };
   } else {
-    const g = await client(accountId).post<GMessage>(
-      CHAT + `/${spaceId}/messages`,
-      { text, thread: threadId ? { name: threadId } : undefined },
-      threadId ? { messageReplyOption: 'REPLY_MESSAGE_FALLBACK_TO_NEW_THREAD' } : undefined
+    const g = await needsChatApp(accountId, () =>
+      client(accountId).post<GMessage>(
+        CHAT + `/${spaceId}/messages`,
+        { text, thread: threadId ? { name: threadId } : undefined },
+        threadId ? { messageReplyOption: 'REPLY_MESSAGE_FALLBACK_TO_NEW_THREAD' } : undefined
+      )
     );
     msg = toMessage(accountId, spaceId, g, await me(accountId));
     msg.mine = true;
@@ -221,7 +251,7 @@ export async function send(accountId: string, spaceId: string, text: string, thr
 }
 
 export async function react(accountId: string, spaceId: string, messageId: string, emoji: string): Promise<void> {
-  if (!isDemo(accountId)) await client(accountId).post(CHAT + `/${messageId}/reactions`, { emoji: { unicode: emoji } });
+  if (!isDemo(accountId)) await needsChatApp(accountId, () => client(accountId).post(CHAT + `/${messageId}/reactions`, { emoji: { unicode: emoji } }));
   const row = get<{ json: string }>('SELECT json FROM chat_messages WHERE account_id = ? AND space_id = ? AND id = ?', accountId, spaceId, messageId);
   if (row) {
     const m = JSON.parse(row.json) as ChatMessage;
@@ -255,4 +285,126 @@ export function openInBrowser(accountId: string, spaceId: string): void {
 
 export function chatAccounts(): string[] {
   return listAccounts().filter((a) => a.chatEnabled).map((a) => a.id);
+}
+
+// ---------- Status (Google Chat availability) ----------
+
+interface GAvailability {
+  name?: string;
+  state?: 'STATE_UNSPECIFIED' | 'ACTIVE' | 'IDLE' | 'AWAY' | 'DO_NOT_DISTURB';
+  customStatus?: { text?: string; expireTime?: string; emoji?: { unicode?: string } };
+  doNotDisturbMetadata?: { expirationTime?: string };
+}
+
+const PRESENCE: Record<string, ChatStatus['presence']> = { ACTIVE: 'active', IDLE: 'idle', AWAY: 'away', DO_NOT_DISTURB: 'dnd' };
+
+function hasAvailabilityScope(accountId: string): boolean {
+  const r = get<{ scopes: string | null }>('SELECT scopes FROM accounts WHERE id = ?', accountId);
+  // Older sign-ins didn't record scopes; let Google decide in that case.
+  return !r?.scopes || r.scopes.split(/\s+/).includes(AVAILABILITY_SCOPE);
+}
+
+function clearCustom(s: ChatStatus): void {
+  delete s.customText;
+  delete s.customEmoji;
+  delete s.customUntil;
+}
+
+function stored(accountId: string): ChatStatus {
+  return kvGet<ChatStatus>('chatStatus', accountId) ?? { accountId, presence: isDemo(accountId) ? 'active' : 'unknown' };
+}
+
+function withFlags(s: ChatStatus): ChatStatus {
+  const now = Date.now();
+  const out: ChatStatus = { ...s, needsSetup: !!kvGet('chatSetup', s.accountId) || undefined };
+  if (!isDemo(s.accountId)) out.needsPermission = !hasAvailabilityScope(s.accountId) || !!kvGet('chatStatusDenied', s.accountId) || undefined;
+  // Drop anything that has run out since we last heard from Google.
+  if (out.customUntil && out.customUntil < now) clearCustom(out);
+  if (out.presence === 'dnd' && out.dndUntil && out.dndUntil < now) {
+    out.presence = 'active';
+    delete out.dndUntil;
+  }
+  return out;
+}
+
+/** The Chat status of every account that has Chat turned on. */
+export function statuses(): ChatStatus[] {
+  return chatAccounts().map((id) => withFlags(stored(id)));
+}
+
+const toStatus = (accountId: string, g: GAvailability): ChatStatus => ({
+  accountId,
+  presence: PRESENCE[g.state ?? ''] ?? 'unknown',
+  dndUntil: g.doNotDisturbMetadata?.expirationTime ? Date.parse(g.doNotDisturbMetadata.expirationTime) : undefined,
+  customText: g.customStatus?.text || undefined,
+  customEmoji: g.customStatus?.emoji?.unicode || undefined,
+  customUntil: g.customStatus?.expireTime ? Date.parse(g.customStatus.expireTime) : undefined
+});
+
+/** Reads the status from Google (so changes made on the web or phone show up here too). */
+export async function fetchStatus(accountId: string): Promise<void> {
+  if (isDemo(accountId) || !hasAvailabilityScope(accountId)) return;
+  try {
+    const g = await client(accountId).get<GAvailability>(CHAT + '/users/me/availability');
+    kvSet('chatStatus', accountId, toStatus(accountId, g));
+    kvDelete('chatStatusDenied', accountId);
+  } catch (e) {
+    if (e instanceof GoogleApiError && e.status === 403 && /scope|permission/i.test(e.message)) kvSet('chatStatusDenied', accountId, true);
+    else throw e;
+  }
+  changed('chat', accountId);
+}
+
+function demoStatus(accountId: string, patch: Partial<ChatStatus>, clear = false): void {
+  const s = { ...stored(accountId), ...patch };
+  if (clear) clearCustom(s);
+  kvSet('chatStatus', accountId, s);
+  changed('chat', accountId);
+}
+
+const iso = (ms: number) => new Date(ms).toISOString();
+
+/** Automatic (active), Away, or Do not disturb until a time. Changes your status everywhere you use Google Chat. */
+export async function setPresence(accountId: string, mode: 'automatic' | 'away' | 'dnd', until?: number): Promise<void> {
+  if (mode === 'dnd' && (!until || until <= Date.now())) throw new Error('Choose how long Do not disturb should last.');
+  if (isDemo(accountId)) return demoStatus(accountId, { presence: mode === 'automatic' ? 'active' : mode, dndUntil: mode === 'dnd' ? until : undefined });
+  const c = client(accountId);
+  const base = CHAT + '/users/me/availability';
+  await needsChatApp(accountId, () =>
+    mode === 'automatic' ? c.post(base + ':markAsActive', {})
+      : mode === 'away' ? c.post(base + ':markAsAway', {})
+        : c.post(base + ':markAsDoNotDisturb', { expireTime: iso(until!) })
+  );
+  // Show the change straight away, then confirm with Google.
+  kvSet('chatStatus', accountId, { ...stored(accountId), presence: mode === 'automatic' ? 'active' : mode, dndUntil: mode === 'dnd' ? until : undefined });
+  changed('chat', accountId);
+  await fetchStatus(accountId).catch(() => undefined);
+}
+
+/** Sets (or, with no text, clears) the custom status shown next to your name in Google Chat. */
+export async function setCustomStatus(accountId: string, text: string | null, emoji?: string, until?: number): Promise<void> {
+  const t = text?.trim().slice(0, 64);
+  if (isDemo(accountId)) return demoStatus(accountId, t ? { customText: t, customEmoji: emoji || undefined, customUntil: until } : {}, !t);
+  await needsChatApp(accountId, () =>
+    client(accountId).patch(
+      CHAT + '/users/me/availability',
+      {
+        name: 'users/me/availability',
+        customStatus: t ? { text: t, emoji: emoji ? { unicode: emoji } : undefined, expireTime: until ? iso(until) : undefined } : undefined
+      },
+      { updateMask: 'customStatus' }
+    )
+  );
+  const s = { ...stored(accountId) };
+  if (t) Object.assign(s, { customText: t, customEmoji: emoji || undefined, customUntil: until });
+  else clearCustom(s);
+  kvSet('chatStatus', accountId, s);
+  changed('chat', accountId);
+  await fetchStatus(accountId).catch(() => undefined);
+}
+
+/** Opens the Google Cloud page for the one-time Chat app settings. */
+export function openChatSetup(accountId: string): void {
+  const acc = getAccount(accountId);
+  void shell.openExternal(`${CHAT_SETUP_URL}?authuser=${encodeURIComponent(acc.email)}`);
 }

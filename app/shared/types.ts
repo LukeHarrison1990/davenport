@@ -369,6 +369,21 @@ export interface ChatMessage {
   mine: boolean;
 }
 
+/** Your Google Chat status, read from and written to Google so it matches Chat on the web and phone. */
+export interface ChatStatus {
+  accountId: string;
+  presence: 'active' | 'idle' | 'away' | 'dnd' | 'unknown';
+  /** When Do not disturb ends. */
+  dndUntil?: number;
+  customText?: string;
+  customEmoji?: string;
+  customUntil?: number;
+  /** Davenport needs to be signed in again before it can see or change the status. */
+  needsPermission?: boolean;
+  /** Google's one-time "Chat app" setting is missing from the Cloud project (needed to send or change anything). */
+  needsSetup?: boolean;
+}
+
 // ---------- Settings ----------
 
 export interface Settings {
@@ -427,6 +442,17 @@ export const defaultSettings: Settings = {
   favourites: [],
   unifiedInbox: true
 };
+
+/** Progress of a Send / Receive (F9). */
+export interface SyncProgress {
+  active: boolean;
+  done: number;
+  total: number;
+  /** What is happening now, e.g. "Mail · you@school.org". */
+  label: string;
+  /** When the last Send / Receive finished. */
+  finishedAt?: number;
+}
 
 export interface AppInfo {
   version: string;

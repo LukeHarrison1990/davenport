@@ -1,13 +1,13 @@
 // Chat: Google Chat spaces and direct messages, with threads and reactions.
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
-import type { ChatMessage, ChatSpace } from '../../shared/types';
+import type { Account, ChatMessage, ChatSpace, ChatStatus } from '../../shared/types';
 import { call, useLive } from '../api';
 import { Icon } from '../components/Icon';
-import { openMenu } from '../components/Menu';
+import { openMenu, type MenuEntry } from '../components/Menu';
 import { Rail, Ribbon, StatusBar, TitleBar } from '../components/Shell';
-import { Avatar, Empty } from '../components/ui';
+import { Avatar, Dialog, Empty, Field } from '../components/ui';
 import { fail, notify, useApp } from '../state';
-import { cx, longDay, sameDay, time } from '../util';
+import { addDays, cx, dayName, longDay, sameDay, startOfDay, time } from '../util';
 
 const REACTIONS = ['👍', '❤️', '😂', '🎉', '👀', '✅'];
 
@@ -26,6 +26,24 @@ export function ChatView() {
   const [spaces] = useLive(() => call('chat.spaces', 'all'), ['chat', 'accounts'], [], [] as ChatSpace[]);
   const [current, setCurrent] = useState<ChatSpace | null>(null);
   const [thread, setThread] = useState<ChatMessage | null>(null);
+  const [statuses] = useLive(() => call('chat.statuses'), ['chat', 'accounts'], [], [] as ChatStatus[]);
+  const [editing, setEditing] = useState<ChatStatus | null>(null);
+  const [collapsed, setCollapsed] = useState<string[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('dav.chatCollapsed') ?? '[]') as string[];
+    } catch {
+      return [];
+    }
+  });
+  const toggle = (id: string) => {
+    const next = collapsed.includes(id) ? collapsed.filter((x) => x !== id) : [...collapsed, id];
+    setCollapsed(next);
+    try {
+      localStorage.setItem('dav.chatCollapsed', JSON.stringify(next));
+    } catch {
+      /* not essential */
+    }
+  };
 
   useEffect(() => {
     if (!current && spaces.length) setCurrent(spaces.find((s) => s.kind === 'space') ?? spaces[0]);
@@ -38,8 +56,8 @@ export function ChatView() {
 
   const q = search.toLowerCase();
   const visible = spaces.filter((s) => !q || s.name.toLowerCase().includes(q) || (s.lastPreview ?? '').toLowerCase().includes(q));
-  const dms = visible.filter((s) => s.kind !== 'space');
-  const rooms = visible.filter((s) => s.kind === 'space');
+  const statusOf = (id: string): ChatStatus => statuses.find((x) => x.accountId === id) ?? { accountId: id, presence: 'unknown' };
+  const statusAccount = current?.accountId ?? chatAccounts[0]?.id;
 
   if (!chatAccounts.length) {
     return (
@@ -90,21 +108,216 @@ export function ChatView() {
           } },
           { label: 'Open in Google Chat', icon: 'open', disabled: !current, onClick: () => current && call('chat.openInBrowser', current.accountId, current.id) },
           { label: 'Refresh', icon: 'sync', onClick: () => current && call('chat.refresh', current.accountId).catch(fail) }
+        ] },
+        { label: 'Status', buttons: [
+          { label: 'Set status', icon: 'user', disabled: !statusAccount, menu: () => (statusAccount ? statusMenu(chatAccounts.find((a) => a.id === statusAccount)!, statusOf(statusAccount), setEditing, chatAccounts.length > 1) : []) }
         ] }
       ]} />
       <div className="body">
         <Rail />
         <nav className="pane chat-list" aria-label="Conversations">
-          <div className="pane-heading">Direct messages</div>
-          {dms.map(conv)}
-          <div className="pane-heading" style={{ marginTop: 14 }}>Spaces</div>
-          {rooms.map(conv)}
+          {chatAccounts.map((a) => {
+            const mine = visible.filter((s) => s.accountId === a.id);
+            const dms = mine.filter((s) => s.kind !== 'space');
+            const rooms = mine.filter((s) => s.kind === 'space');
+            const st = statusOf(a.id);
+            const open = !collapsed.includes(a.id);
+            const unread = mine.filter((s) => s.unread).length;
+            if (q && !mine.length) return null;
+            return (
+              <section key={a.id} className="chat-account" aria-label={`Chat for ${a.email}`}>
+                <div className="chat-account-head">
+                  <button className="account-heading" onClick={() => toggle(a.id)} aria-expanded={open}>
+                    <Icon name={open ? 'chevDown' : 'chevRight'} size={12} />
+                    <span className="dot" style={{ background: a.color }} />
+                    <span className="email">{a.email}</span>
+                    {!open && <PresenceDot presence={st.presence} />}
+                    {!open && unread > 0 && <span className="cnt">{unread}</span>}
+                  </button>
+                </div>
+                {open && (
+                  <>
+                    <div className="chat-status-row">
+                      <button className="presence-pill" aria-label={`Status for ${a.email}: ${presenceLabel(st)}. Change status`} title={presenceLabel(st)}
+                        onClick={(e) => openMenu(statusMenu(a, st, setEditing, false), e.currentTarget)}>
+                        <PresenceDot presence={st.presence} />
+                        <span>{presenceShort(st)}</span>
+                        <Icon name="chevDown" size={10} />
+                      </button>
+                      <button className="custom-status" onClick={() => setEditing(st)} title={st.customText ? `${st.customText}${st.customUntil ? ' · until ' + untilText(st.customUntil) : ''}` : 'Set a status message'}>
+                        {st.customText ? <>{st.customEmoji && <span className="emoji">{st.customEmoji}</span>}<span className="text">{st.customText}</span></> : <span className="placeholder">Set a status message</span>}
+                      </button>
+                    </div>
+                    {st.needsSetup && <ChatSetupHelp account={a} />}
+                    {st.needsPermission && !st.needsSetup && (
+                      <div className="chat-notice" role="note">
+                        <p>To show and change your Chat status, Google needs you to give Davenport one more permission.</p>
+                        <button className="btn small" onClick={() => call('accounts.enableChat', a.id).catch(fail)}>Allow status</button>
+                      </div>
+                    )}
+                    {dms.length > 0 && <div className="pane-heading">Direct messages</div>}
+                    {dms.map(conv)}
+                    {rooms.length > 0 && <div className="pane-heading" style={{ marginTop: 10 }}>Spaces</div>}
+                    {rooms.map(conv)}
+                    {!mine.length && <p className="hint-text" style={{ padding: '4px 8px' }}>{q ? 'No matches' : 'No conversations yet'}</p>}
+                  </>
+                )}
+              </section>
+            );
+          })}
         </nav>
         {current ? <SpaceView key={current.accountId + current.id} space={current} onThread={setThread} /> : <div className="chat-main"><Empty icon="chat" title="Choose a conversation" /></div>}
         {thread && current && <ThreadPanel space={current} root={thread} onClose={() => setThread(null)} />}
       </div>
       <StatusBar left={<span>{spaces.filter((s) => s.unread).length} unread conversations</span>} />
+      {editing && <CustomStatusDialog status={editing} account={chatAccounts.find((a) => a.id === editing.accountId)} onClose={() => setEditing(null)} />}
     </>
+  );
+}
+
+// ---------- Status ----------
+
+const untilText = (ms: number) => (sameDay(ms, Date.now()) ? time(ms) : `${dayName(ms)} ${time(ms)}`);
+
+function presenceShort(s: ChatStatus): string {
+  switch (s.presence) {
+    case 'active': return 'Active';
+    case 'idle': return 'Idle';
+    case 'away': return 'Away';
+    case 'dnd': return 'Do not disturb';
+    default: return 'Status';
+  }
+}
+const presenceLabel = (s: ChatStatus) => (s.presence === 'dnd' && s.dndUntil ? `Do not disturb until ${untilText(s.dndUntil)}` : presenceShort(s));
+
+export function PresenceDot({ presence }: { presence: ChatStatus['presence'] }) {
+  return <span className={cx('presence-dot', presence)} aria-hidden="true" />;
+}
+
+/** Ends of common time spans, in the same spirit as Google Chat's own menu. */
+function dndChoices(): { label: string; at: number }[] {
+  const now = Date.now();
+  const tomorrow9 = startOfDay(addDays(now, 1)) + 9 * 3600_000;
+  const day = new Date(now).getDay();
+  const nextMonday9 = startOfDay(addDays(now, ((8 - day) % 7) || 7)) + 9 * 3600_000;
+  return [
+    { label: '30 minutes', at: now + 30 * 60_000 },
+    { label: '1 hour', at: now + 3600_000 },
+    { label: '2 hours', at: now + 2 * 3600_000 },
+    { label: '4 hours', at: now + 4 * 3600_000 },
+    { label: '8 hours', at: now + 8 * 3600_000 },
+    { label: `Until tomorrow (${time(tomorrow9)})`, at: tomorrow9 },
+    { label: 'Until next week', at: nextMonday9 }
+  ];
+}
+
+function statusMenu(a: Account, st: ChatStatus, edit: (s: ChatStatus) => void, showAccount: boolean): MenuEntry[] {
+  const set = (mode: 'automatic' | 'away' | 'dnd', until?: number) =>
+    call('chat.setPresence', a.id, mode, until).then(() => notify(mode === 'dnd' ? `Do not disturb until ${untilText(until!)}` : mode === 'away' ? 'Your status is Away' : 'Your status is Automatic')).catch(fail);
+  return [
+    ...(showAccount ? [{ header: a.email } as MenuEntry] : []),
+    { label: 'Automatic', hint: 'Active when you’re using Chat', checked: st.presence === 'active' || st.presence === 'idle', onClick: () => void set('automatic') },
+    { label: 'Do not disturb', hint: st.presence === 'dnd' && st.dndUntil ? `until ${untilText(st.dndUntil)}` : 'Mute notifications', checked: st.presence === 'dnd', submenu: dndChoices().map((c) => ({ label: c.label, onClick: () => void set('dnd', c.at) })) },
+    { label: 'Set as away', checked: st.presence === 'away', onClick: () => void set('away') },
+    { sep: true },
+    { label: st.customText ? 'Edit status message…' : 'Add a status message…', icon: 'edit', onClick: () => edit(st) },
+    { label: 'Clear status message', disabled: !st.customText, onClick: () => void call('chat.setCustomStatus', a.id, null).catch(fail) }
+  ];
+}
+
+const PRESETS: { emoji: string; text: string; clear: string }[] = [
+  { emoji: '📅', text: 'In a meeting', clear: '1h' },
+  { emoji: '🧑‍🏫', text: 'Teaching', clear: '1h' },
+  { emoji: '🚗', text: 'Commuting', clear: '30m' },
+  { emoji: '🍽️', text: 'Out for lunch', clear: '1h' },
+  { emoji: '🏠', text: 'Working from home', clear: 'today' },
+  { emoji: '🤒', text: 'Off sick', clear: 'today' },
+  { emoji: '🌴', text: 'On holiday', clear: 'never' }
+];
+const EMOJIS = ['💬', '📅', '🧑‍🏫', '🚗', '🍽️', '🏠', '🤒', '🌴', '🎧', '✈️', '🔕', '☕'];
+
+function clearAt(choice: string): number | undefined {
+  const now = Date.now();
+  switch (choice) {
+    case '30m': return now + 30 * 60_000;
+    case '1h': return now + 3600_000;
+    case '4h': return now + 4 * 3600_000;
+    case 'today': return startOfDay(addDays(now, 1)) - 60_000;
+    case 'week': {
+      const day = new Date(now).getDay();
+      return startOfDay(addDays(now, ((7 - day) % 7) || 7)) + 24 * 3600_000 - 60_000;
+    }
+    default: return undefined;
+  }
+}
+
+function CustomStatusDialog({ status, account, onClose }: { status: ChatStatus; account?: Account; onClose: () => void }) {
+  const [text, setText] = useState(status.customText ?? '');
+  const [emoji, setEmoji] = useState(status.customEmoji ?? '💬');
+  const [clear, setClear] = useState(status.customUntil ? 'keep' : 'never');
+  const [busy, setBusy] = useState(false);
+  const save = async (t: string | null) => {
+    setBusy(true);
+    try {
+      const until = clear === 'keep' ? status.customUntil : clearAt(clear);
+      await call('chat.setCustomStatus', status.accountId, t, t ? emoji : undefined, until);
+      notify(t ? 'Status message set in Google Chat' : 'Status message cleared');
+      onClose();
+    } catch (e) {
+      fail(e);
+      setBusy(false);
+    }
+  };
+  return (
+    <Dialog title="Status message" onClose={onClose} className="status-dialog"
+      footer={<>
+        {status.customText && <button className="btn" disabled={busy} onClick={() => void save(null)}>Clear</button>}
+        <span style={{ flex: 1 }} />
+        <button className="btn" onClick={onClose}>Cancel</button>
+        <button className="btn primary" disabled={busy || !text.trim()} onClick={() => void save(text)}>Save</button>
+      </>}>
+      {account && <p className="hint-text" style={{ marginTop: 0 }}>Shown next to your name in Google Chat for {account.email}, on the web and on phones too.</p>}
+      <div className="status-input">
+        <button className="emoji-btn" aria-label={`Emoji: ${emoji}. Change`} onClick={(e) => openMenu(EMOJIS.map((x) => ({ label: x, onClick: () => setEmoji(x) })), e.currentTarget)}>{emoji}</button>
+        <label htmlFor="status-text" className="sr-only">Status message</label>
+        <input id="status-text" className="input" maxLength={64} placeholder="What's your status?" value={text} onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && text.trim() && void save(text)} />
+      </div>
+      <div className="status-presets" role="list" aria-label="Suggestions">
+        {PRESETS.map((p) => (
+          <button key={p.text} role="listitem" className="preset" onClick={() => { setEmoji(p.emoji); setText(p.text); setClear(p.clear); }}>
+            <span className="emoji">{p.emoji}</span> {p.text}
+          </button>
+        ))}
+      </div>
+      <Field label="Clear after">
+        <select className="input" value={clear} onChange={(e) => setClear(e.target.value)}>
+          {status.customUntil && <option value="keep">Keep current ({untilText(status.customUntil)})</option>}
+          <option value="never">Don't clear</option>
+          <option value="30m">30 minutes</option>
+          <option value="1h">1 hour</option>
+          <option value="4h">4 hours</option>
+          <option value="today">Today</option>
+          <option value="week">This week</option>
+        </select>
+      </Field>
+    </Dialog>
+  );
+}
+
+/** Google's one-time Chat app settings, explained where the problem shows up. */
+function ChatSetupHelp({ account }: { account: Account }) {
+  return (
+    <div className="chat-notice setup" role="note" aria-label="Chat setup needed">
+      <p><b>One more Google setting is needed</b> before Davenport can send messages or change your status (reading works already). In the Google Cloud project that holds Davenport's sign-in:</p>
+      <ol>
+        <li>Open <b>Google Chat API › Configuration</b>.</li>
+        <li>Enter an <b>App name</b> (Davenport), an <b>Avatar URL</b> (an https link to any square picture) and a <b>Description</b>.</li>
+        <li>Leave <b>Enable interactive features</b> turned off, then click <b>Save</b>.</li>
+      </ol>
+      <p>Then send your message again — it can take a minute or two to start working.</p>
+      <button className="btn small primary" onClick={() => call('chat.openSetup', account.id).catch(fail)}>Open Google Cloud</button>
+    </div>
   );
 }
 

@@ -7,7 +7,7 @@ import { Icon, Logo } from './Icon';
 import { openMenu, type MenuEntry } from './Menu';
 
 export function TitleBar({ placeholder, onSearch }: { placeholder: string; onSearch?: (q: string) => void }) {
-  const { accounts, search, setSearch, openDialog } = useApp();
+  const { accounts, search, setSearch, openDialog, syncProgress } = useApp();
   const [text, setText] = useState(search);
   const ref = useRef<HTMLInputElement>(null);
   const pushed = useRef(search);
@@ -37,7 +37,9 @@ export function TitleBar({ placeholder, onSearch }: { placeholder: string; onSea
     window.addEventListener('dav:focus-search', focus);
     return () => window.removeEventListener('dav:focus-search', focus);
   }, []);
-  const status = accounts.some((a) => a.status === 'reauth')
+  const status = syncProgress.active
+    ? { text: 'Sending and receiving…', colour: '#D9E2EE', icon: 'sync' }
+    : accounts.some((a) => a.status === 'reauth')
     ? { text: 'Sign-in needed', colour: '#F2C14E', icon: 'warning' }
     : accounts.some((a) => a.status === 'syncing')
       ? { text: 'Syncing…', colour: '#D9E2EE', icon: 'sync' }
@@ -94,8 +96,8 @@ export function TitleBar({ placeholder, onSearch }: { placeholder: string; onSea
         </form>
       )}
       <div className="right" style={accounts.length ? undefined : { visibility: 'hidden' }}>
-        <button className="sync" onClick={() => call('sync.now')} title="Send / Receive (F9)">
-          <Icon name={status.icon} size={14} />
+        <button className="sync" onClick={() => call('sync.now')} title="Send / Receive (F9)" aria-busy={syncProgress.active}>
+          <span className={cx('sync-icon', syncProgress.active && 'spinning')}><Icon name={syncProgress.active ? 'sync' : status.icon} size={14} /></span>
           <span style={{ color: status.colour }}>{status.text}</span>
         </button>
         <button
@@ -166,6 +168,8 @@ export interface RibbonButton {
   title?: string;
   iconColour?: string;
   iconOnly?: boolean;
+  /** Animate the icon (e.g. the Send / Receive arrows while syncing). */
+  spin?: boolean;
   /** A split button: the main action plus an attached arrow that opens this menu. */
   split?: () => MenuEntry[] | Promise<MenuEntry[]>;
 }
@@ -208,7 +212,7 @@ export function Ribbon({ tabs, groups }: { tabs?: { id: string; label: string; g
                         else b.onClick?.(e);
                       }}
                     >
-                      <span className="tb-icon" style={{ color: b.iconColour }}>{b.icon && <Icon name={b.icon} size={16} />}</span>
+                      <span className={cx('tb-icon', b.spin && 'spinning')} style={{ color: b.iconColour }}>{b.icon && <Icon name={b.icon} size={16} />}</span>
                       <span className="tb-label">
                         {b.label}
                         {b.menu && <Icon name="chevDown" size={11} className="chev" />}
@@ -244,24 +248,46 @@ export function Ribbon({ tabs, groups }: { tabs?: { id: string; label: string; g
 }
 
 export function StatusBar({ left, right }: { left?: ReactNode; right?: ReactNode }) {
-  const { accounts } = useApp();
+  const { accounts, syncProgress: p } = useApp();
   const google = accounts.filter((a) => a.kind === 'google');
   const problem = accounts.find((a) => a.status === 'reauth' || a.status === 'error' || a.status === 'offline');
   const syncing = accounts.find((a) => a.status === 'syncing');
+  // Say "complete" for a few seconds after Send / Receive finishes, so a quick one still shows it happened.
+  const [, tick] = useState(0);
+  const justFinished = !p.active && !!p.finishedAt && Date.now() - p.finishedAt < 4000;
+  useEffect(() => {
+    if (!justFinished) return;
+    const t = setTimeout(() => tick((n) => n + 1), 4000 - (Date.now() - p.finishedAt!));
+    return () => clearTimeout(t);
+  }, [justFinished, p.finishedAt]);
+  const pct = p.total ? Math.round((p.done / p.total) * 100) : 0;
   return (
     <footer className="statusbar">
       {left}
       <span className="right">
         {right}
-        <span>
-          {problem
-            ? `${problem.email}: ${problem.status === 'reauth' ? 'please sign in again' : problem.error ?? problem.status}`
-            : syncing
-              ? syncing.error ?? 'Syncing…'
-              : accounts.length
-                ? `All folders are up to date · ${google.length ? 'Connected to Google' : 'Demo data'}`
-                : 'No accounts'}
-        </span>
+        {p.active ? (
+          <span className="sync-progress" role="status" aria-live="polite">
+            <span className="spinning"><Icon name="sync" size={12} /></span>
+            <span>Send/Receive: {p.label}…</span>
+            <span className="bar" role="progressbar" aria-label="Send/Receive progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}>
+              <span style={{ width: `${Math.max(4, pct)}%` }} />
+            </span>
+            <span className="pct">{pct}%</span>
+          </span>
+        ) : (
+          <span role="status">
+            {problem
+              ? `${problem.email}: ${problem.status === 'reauth' ? 'please sign in again' : problem.error ?? problem.status}`
+              : justFinished
+                ? 'Send/Receive complete · all folders are up to date'
+                : syncing
+                  ? syncing.error ?? 'Syncing…'
+                  : accounts.length
+                    ? `All folders are up to date · ${google.length ? 'Connected to Google' : 'Demo data'}`
+                    : 'No accounts'}
+          </span>
+        )}
       </span>
     </footer>
   );

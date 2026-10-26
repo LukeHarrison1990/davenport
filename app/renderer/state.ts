@@ -1,6 +1,6 @@
 // Window-wide interface state (what's selected, which module is open, dialogs).
 import { create } from 'zustand';
-import type { Account, FolderRef, Settings, Toast } from '../shared/types';
+import type { Account, FolderRef, Settings, SyncProgress, Toast } from '../shared/types';
 import { defaultSettings } from '../shared/types';
 import { call } from './api';
 
@@ -26,6 +26,7 @@ interface State {
   dialog: DialogName;
   dialogArg: unknown;
   toasts: Toast[];
+  syncProgress: SyncProgress;
   setModule: (m: Module) => void;
   setAccounts: (a: Account[]) => void;
   setSettings: (s: Settings) => void;
@@ -38,6 +39,7 @@ interface State {
   openDialog: (d: DialogName, arg?: unknown) => void;
   pushToast: (t: Toast) => void;
   dropToast: (id: string) => void;
+  setSyncProgress: (p: SyncProgress) => void;
 }
 
 export const useApp = create<State>((set, get) => ({
@@ -52,6 +54,8 @@ export const useApp = create<State>((set, get) => ({
   dialog: null,
   dialogArg: undefined,
   toasts: [],
+  syncProgress: { active: false, done: 0, total: 0, label: '' },
+  setSyncProgress: (syncProgress) => set({ syncProgress }),
   setModule: (module) => set(module === get().module ? { module } : { module, search: '' }),
   setAccounts: (accounts) => {
     const cur = get().mail;

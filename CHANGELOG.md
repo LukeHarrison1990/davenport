@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.8 — 2026-10-26
+
+- Send / Receive shows that it's working: the arrows turn, the status bar shows a progress bar with what's being fetched (Mail, Calendar, Tasks, Contacts, Directory, Chat, per account), and it says when it's finished. Pressing it again while it runs doesn't start a second one.
+- The Focused Inbox's second tab is now called **Standard**. Hovering over either tab shows what goes in it.
+- Chat: conversations are grouped under each account (collapsible), like folders in Mail.
+- Chat status: set Automatic, Do not disturb (30 minutes to a week) or Away, plus a status message with an emoji and an end time. It's stored in Google, so it's the same in Chat on the web and phones, and changes made there show up in Davenport. Accounts that turned Chat on earlier get an **Allow status** button for the extra permission.
+- Chat: if Google says "Google Chat app not found" (the Cloud project's one-time Chat app details are missing, which Google requires for sending), Davenport now shows the steps to fix it in Chat, with a button to the right Google Cloud page. The setup guide has been updated to match.
+
 ## 1.0.7 — 2026-10-22
 
 - Fixed: turning on automatic replies with "Also show me as out of office in Calendar" failed with "An out of office event must not have a description". Google keeps an out-of-office entry's message in its own decline-message field and refuses a description, so Davenport now sends the message there (and leaves out location, guests and Meet links, which Google also refuses on these entries). The message shows in the Calendar entry as before.

@@ -11,7 +11,7 @@ import { MessageList } from './MessageList';
 import { ReadingPane } from './ReadingPane';
 
 export function MailView() {
-  const { accounts, mail, selected, settings, openDialog, updateSettings, setSearch } = useApp();
+  const { accounts, mail, selected, settings, openDialog, updateSettings, setSearch, syncProgress } = useApp();
   const [folders] = useLive(
     async () => {
       const out: Folder[] = [];
@@ -146,7 +146,7 @@ export function MailView() {
   const tabs = [
     { id: 'send', label: 'Send / Receive', groups: [
       { label: 'Send & Receive', buttons: [
-        { label: 'Send / Receive all folders', icon: 'sync', onClick: () => void call('sync.now'), title: 'F9' },
+        { label: 'Send / Receive all folders', icon: 'sync', spin: syncProgress.active, onClick: () => void call('sync.now'), title: 'F9' },
         { label: 'Scheduled', icon: 'scheduled', onClick: () => useApp.getState().openFolder({ accountId: 'all', folder: { type: 'label', id: 'SCHEDULED' }, folderName: 'Scheduled' }) }
       ] },
       { label: 'Preferences', buttons: [
