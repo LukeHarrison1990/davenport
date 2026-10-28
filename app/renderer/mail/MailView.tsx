@@ -1,8 +1,9 @@
 // The Mail module: ribbon, folder pane, message list, reading pane and To-Do bar.
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import type { Folder } from '../../shared/types';
 import { call, useLive } from '../api';
 import { Rail, Ribbon, StatusBar, TitleBar, type RibbonGroup } from '../components/Shell';
+import { Splitter, usePaneSize } from '../components/Splitter';
 import { TodoBar } from '../components/TodoBar';
 import { fail, notify, useApp } from '../state';
 import { archive, categoryMenu, del, flag, flagMenu, markRead, newMail, quickStepsMenu, respond, snoozeMenu, spam } from './actions';
@@ -23,18 +24,15 @@ export function MailView() {
     [] as Folder[]
   );
 
+  // Resizable panes, remembered between sessions (double-click a divider to reset it).
   const splitRef = useRef<HTMLDivElement>(null);
-  const clampHeight = (h: number) => {
-    const total = splitRef.current?.getBoundingClientRect().height ?? 700;
-    return Math.round(Math.max(120, Math.min(total - 160, h)));
-  };
-  const [listHeight, setListHeight] = useState(() => {
-    try {
-      return Number(localStorage.getItem('dav.listHeight')) || 300;
-    } catch {
-      return 300;
-    }
-  });
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const [folderWidth, setFolderWidth, saveFolderWidth] = usePaneSize('dav.folderWidth', 240);
+  const [listWidth, setListWidth, saveListWidth] = usePaneSize('dav.listWidth', 380);
+  const [listHeight, setListHeight, saveListHeight] = usePaneSize('dav.listHeight', 300);
+  const [todoWidth, setTodoWidth, saveTodoWidth] = usePaneSize('dav.todoWidth', 264);
+  const splitBox = () => splitRef.current?.getBoundingClientRect() ?? { width: 900, height: 700 };
+  const bodyWidth = () => bodyRef.current?.getBoundingClientRect().width ?? 1400;
 
   const has = selected.length > 0;
   const one = selected.length === 1;
@@ -198,45 +196,26 @@ export function MailView() {
     <>
       <TitleBar placeholder="Search mail" onSearch={(q) => setSearch(q)} />
       <Ribbon groups={home} tabs={tabs} />
-      <div className="body">
+      <div className="body" ref={bodyRef}>
         <Rail />
-        <FolderPane />
+        <FolderPane width={folderWidth} />
+        <Splitter dir="x" label="Resize folder pane" size={folderWidth} setSize={setFolderWidth} onCommit={saveFolderWidth} min={170} max={() => Math.min(480, bodyWidth() - 640)} reset={240} />
         <div className={'mail-split ' + pane} ref={splitRef}>
-          <MessageList folders={folders} position={pane} height={pane === 'bottom' ? listHeight : undefined} />
+          <MessageList folders={folders} position={pane} size={pane === 'bottom' ? listHeight : pane === 'right' ? listWidth : undefined} />
+          {pane === 'right' && (
+            <Splitter dir="x" label="Resize message list" size={listWidth} setSize={setListWidth} onCommit={saveListWidth} min={260} max={() => splitBox().width - 320} reset={380} />
+          )}
           {pane === 'bottom' && (
-            <div
-              className="splitter"
-              role="separator"
-              aria-orientation="horizontal"
-              aria-label="Resize message list"
-              tabIndex={0}
-              onKeyDown={(e) => {
-                if (e.key === 'ArrowUp') setListHeight((h) => clampHeight(h - 24));
-                if (e.key === 'ArrowDown') setListHeight((h) => clampHeight(h + 24));
-              }}
-              onMouseDown={(e) => {
-                e.preventDefault();
-                const top = splitRef.current!.getBoundingClientRect().top;
-                const el = e.currentTarget;
-                el.classList.add('dragging');
-                const move = (ev: MouseEvent) => setListHeight(clampHeight(ev.clientY - top));
-                const up = () => {
-                  el.classList.remove('dragging');
-                  window.removeEventListener('mousemove', move);
-                  window.removeEventListener('mouseup', up);
-                  setListHeight((h) => {
-                    try { localStorage.setItem('dav.listHeight', String(h)); } catch { /* ignore */ }
-                    return h;
-                  });
-                };
-                window.addEventListener('mousemove', move);
-                window.addEventListener('mouseup', up);
-              }}
-            />
+            <Splitter dir="y" label="Resize message list" size={listHeight} setSize={setListHeight} onCommit={saveListHeight} min={120} max={() => splitBox().height - 160} reset={300} />
           )}
           {pane !== 'off' && <ReadingPane folders={folders} />}
         </div>
-        {settings.todoBar && <TodoBar />}
+        {settings.todoBar && (
+          <>
+            <Splitter dir="x" invert label="Resize To-Do bar" size={todoWidth} setSize={setTodoWidth} onCommit={saveTodoWidth} min={220} max={() => Math.min(440, bodyWidth() - 760)} reset={264} />
+            <TodoBar width={todoWidth} />
+          </>
+        )}
       </div>
       <MailStatus />
     </>

@@ -3,13 +3,13 @@ import { useEffect, useState } from 'react';
 import type { Draft, Folder, MessageDetail } from '../../shared/types';
 import { call, useLive } from '../api';
 import { Icon } from '../components/Icon';
-import { openMenu } from '../components/Menu';
+import { openMenu, type MenuEntry } from '../components/Menu';
 import { Avatar, Empty } from '../components/ui';
 import { fail, notify, useApp } from '../state';
 import { addrFull, addrName, bytes, cx, fileKind, fullDate, listTime } from '../util';
-import { createEventFrom, flag, flagMenu, respond, rowMenu, type Sel } from './actions';
+import { createEventFrom, flag, flagMenu, newMail, respond, rowMenu, type Sel } from './actions';
 import { Compose } from './Compose';
-import { MessageBody } from './MessageBody';
+import { MessageBody, type BodyContext } from './MessageBody';
 
 export function ReadingPane({ folders, standalone }: { folders: Folder[]; standalone?: { accountId: string; id: string; threadId: string } }) {
   const { selected, settings, mail } = useApp();
@@ -89,6 +89,7 @@ export function ReadingPane({ folders, standalone }: { folders: Folder[]; standa
           <ThreadMessage key={m.id} m={m} expandedByDefault={i === thread.length - 1 || m.unread || thread.length <= 2} single={thread.length === 1}
             onReply={(mode) => void respond([{ accountId: m.accountId, id: m.id, threadId: m.threadId }], mode, (d) => setInlineDraft(d))}
             onMenu={(e) => openMenu(rowMenu(m, [{ accountId: m.accountId, id: m.id, threadId: m.threadId }], accFolders, folderId), e.currentTarget)}
+            onContext={(c) => openMenu(readingMenu(m, c, accFolders, folderId, !standalone), { x: c.x, y: c.y })}
           />
         ))}
 
@@ -125,7 +126,7 @@ export function ReadingPane({ folders, standalone }: { folders: Folder[]; standa
   );
 }
 
-function ThreadMessage({ m, expandedByDefault, single, onReply, onMenu }: { m: MessageDetail; expandedByDefault: boolean; single: boolean; onReply: (mode: 'reply' | 'replyAll' | 'forward') => void; onMenu: (e: React.MouseEvent<HTMLButtonElement>) => void }) {
+function ThreadMessage({ m, expandedByDefault, single, onReply, onMenu, onContext }: { m: MessageDetail; expandedByDefault: boolean; single: boolean; onReply: (mode: 'reply' | 'replyAll' | 'forward') => void; onMenu: (e: React.MouseEvent<HTMLButtonElement>) => void; onContext: (c: BodyContext) => void }) {
   const [open, setOpen] = useState(expandedByDefault);
   const [allowRemote, setAllowRemote] = useState(false);
   const [blocked, setBlocked] = useState(0);
@@ -203,7 +204,7 @@ function ThreadMessage({ m, expandedByDefault, single, onReply, onMenu }: { m: M
         </div>
       )}
       <div style={{ paddingTop: 12 }}>
-        <MessageBody html={m.html} text={m.text ?? m.snippet} allowRemote={allowRemote} onBlocked={setBlocked} />
+        <MessageBody html={m.html} text={m.text ?? m.snippet} allowRemote={allowRemote} onBlocked={setBlocked} onContextMenu={onContext} />
       </div>
       {m.listUnsubscribe && (
         <div className="hint-text" style={{ marginTop: 12 }}>
@@ -218,20 +219,80 @@ function ThreadMessage({ m, expandedByDefault, single, onReply, onMenu }: { m: M
     </>
   );
 
+  // Right-clicking the header or around the message gives the same menu as right-clicking its text.
+  const onAreaMenu = (e: React.MouseEvent) => {
+    if (e.defaultPrevented) return;
+    const t = e.target as HTMLElement;
+    if (t.closest('input, textarea, [contenteditable="true"], .attachment')) return;
+    e.preventDefault();
+    const sel = window.getSelection();
+    onContext({
+      x: e.clientX,
+      y: e.clientY,
+      selection: sel && !sel.isCollapsed ? sel.toString() : '',
+      link: t.closest('a')?.getAttribute('href') ?? undefined,
+      selectAll: () => {
+        const area = (e.target as HTMLElement).closest('.msg-area');
+        if (!area) return;
+        const range = document.createRange();
+        range.selectNodeContents(area);
+        sel?.removeAllRanges();
+        sel?.addRange(range);
+      }
+    });
+  };
+
   if (single) {
     return (
-      <>
+      <div className="msg-area" onContextMenu={onAreaMenu}>
         {head}
         {body}
-      </>
+      </div>
     );
   }
   return (
-    <div className={cx('thread-item', !open && 'collapsed')} onClick={() => !open && setOpen(true)}>
+    <div className={cx('thread-item msg-area', !open && 'collapsed')} onClick={() => !open && setOpen(true)} onContextMenu={onAreaMenu}>
       <div onClick={() => open && setOpen(false)} style={{ cursor: 'pointer' }} title={open ? 'Collapse' : undefined}>{head}</div>
       {open && <div className="body">{body}</div>}
     </div>
   );
+}
+
+/** The reading pane's right-click menu: what you clicked on first (text, a link, a picture), then the message's own actions. */
+function readingMenu(m: MessageDetail, c: BodyContext, folders: Folder[], folderId: string, canPopOut: boolean): MenuEntry[] {
+  const items: MenuEntry[] = [];
+  const copy = (text: string, what: string) => void call('app.copyText', text).then(() => notify(`${what} copied`)).catch(fail);
+  if (c.selection.trim()) items.push({ label: 'Copy', icon: 'copy', hint: 'Ctrl+C', onClick: () => copy(c.selection, 'Text') });
+  items.push({ label: 'Select all', hint: 'Ctrl+A', onClick: c.selectAll });
+  if (c.link && /^mailto:/i.test(c.link)) {
+    const address = decodeURIComponent(c.link.replace(/^mailto:/i, '').split('?')[0]);
+    items.push(
+      { sep: true },
+      { label: `Send email to ${address}`, icon: 'mail', onClick: () => void newMail(m.accountId, address) },
+      { label: 'Copy email address', icon: 'copy', onClick: () => copy(address, 'Email address') }
+    );
+  } else if (c.link && /^https?:/i.test(c.link)) {
+    const url = c.link;
+    items.push(
+      { sep: true },
+      { label: 'Open link', icon: 'open', onClick: () => void call('app.openExternal', url) },
+      { label: 'Copy link', icon: 'link', onClick: () => copy(url, 'Link') }
+    );
+  }
+  if (c.image) {
+    const src = c.image;
+    items.push(
+      { sep: true },
+      { label: 'Copy picture', icon: 'image', onClick: () => void call('app.copyImage', src).then(() => notify('Picture copied')).catch(fail) },
+      { label: 'Save picture as…', icon: 'download', onClick: () => void call('app.saveImage', src).then((p) => p && notify('Saved to ' + p)).catch(fail) }
+    );
+  }
+  const sel = [{ accountId: m.accountId, id: m.id, threadId: m.threadId }];
+  items.push({ sep: true });
+  if (canPopOut) items.push({ label: 'Open in new window', icon: 'popout', onClick: () => void call('app.openWindow', 'message', { accountId: m.accountId, id: m.id, threadId: m.threadId }) });
+  items.push({ label: 'Copy sender’s address', icon: 'person', onClick: () => copy(m.from.email, 'Email address') });
+  items.push({ sep: true }, ...rowMenu(m, sel, folders, folderId));
+  return items;
 }
 
 export function addrsTitle(list: { name?: string; email: string }[]): string {

@@ -6,7 +6,7 @@ import { fail, useApp } from '../state';
 import { addDays, startOfDay, time } from '../util';
 import { MiniCalendar } from './MiniCalendar';
 
-export function TodoBar() {
+export function TodoBar({ width }: { width?: number } = {}) {
   const { setModule, setCalDate } = useApp();
   const [newTask, setNewTask] = useState('');
   const today = startOfDay(Date.now());
@@ -25,7 +25,7 @@ export function TodoBar() {
   };
 
   return (
-    <aside className="todo-bar" aria-label="To-Do bar">
+    <aside className="todo-bar" aria-label="To-Do bar" style={width ? { flex: `0 0 ${width}px` } : undefined}>
       <MiniCalendar value={Date.now()} onPick={(d) => { setCalDate(d); setModule('calendar'); }} />
       <section aria-label="Upcoming">
         <div className="pane-heading" style={{ padding: '0 0 8px' }}>{upcoming.length ? 'Coming up' : 'No more meetings today'}</div>

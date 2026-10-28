@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import DOMPurify from 'dompurify';
 import { call } from '../api';
+import { closeMenu } from '../components/Menu';
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
@@ -44,8 +45,20 @@ export function prepareHtml(html: string | undefined, text: string | undefined, 
   return { doc: `<!doctype html><html><head>${base}${head?.innerHTML ?? ''}</head><body>${tmpl.querySelector('body')?.innerHTML ?? ''}</body></html>`, blocked };
 }
 
-export function MessageBody({ html, text, allowRemote, onBlocked }: { html?: string; text?: string; allowRemote: boolean; onBlocked?: (n: number) => void }) {
+/** What was right-clicked inside a message body. */
+export interface BodyContext {
+  x: number;
+  y: number;
+  selection: string;
+  link?: string;
+  image?: string;
+  selectAll: () => void;
+}
+
+export function MessageBody({ html, text, allowRemote, onBlocked, onContextMenu }: { html?: string; text?: string; allowRemote: boolean; onBlocked?: (n: number) => void; onContextMenu?: (c: BodyContext) => void }) {
   const frame = useRef<HTMLIFrameElement>(null);
+  const menuRef = useRef(onContextMenu);
+  menuRef.current = onContextMenu;
   const [height, setHeight] = useState(120);
   const prepared = useMemo(() => prepareHtml(html, text, allowRemote), [html, text, allowRemote]);
 
@@ -62,6 +75,33 @@ export function MessageBody({ html, text, allowRemote, onBlocked }: { html?: str
       measure();
       ro = new ResizeObserver(measure);
       ro.observe(doc.body);
+      // Clicks inside the frame don't reach the window, so close any open menu from here.
+      doc.addEventListener('mousedown', (e) => {
+        if (e.button === 0) closeMenu();
+      });
+      // The message sits in its own frame, so its right-clicks are passed up to the reading pane's menu.
+      doc.addEventListener('contextmenu', (e) => {
+        if (!menuRef.current) return;
+        e.preventDefault();
+        const r = f.getBoundingClientRect();
+        const t = e.target as Element;
+        const a = t.closest?.('a');
+        const img = t.closest?.('img');
+        menuRef.current({
+          x: r.left + e.clientX,
+          y: r.top + e.clientY,
+          selection: doc.getSelection()?.toString() ?? '',
+          link: a?.getAttribute('href') ?? undefined,
+          image: img?.getAttribute('src') || undefined,
+          selectAll: () => {
+            const range = doc.createRange();
+            range.selectNodeContents(doc.body);
+            const sel = doc.getSelection();
+            sel?.removeAllRanges();
+            sel?.addRange(range);
+          }
+        });
+      });
       doc.addEventListener('click', (e) => {
         const a = (e.target as HTMLElement).closest('a');
         if (a) {

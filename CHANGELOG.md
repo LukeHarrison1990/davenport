@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.10 — 2026-10-28
+
+- Every pane in Mail can be resized: drag the divider between the folder pane, message list, reading pane (right or bottom) and To-Do bar. Sizes are remembered; double-click a divider to put it back. Dividers also move with the arrow keys.
+- Right-clicking a message in the reading pane now opens a menu like Outlook's: Copy and Select all; Open link / Copy link, Send email / Copy email address, and Copy picture / Save picture as… for whatever you clicked on; Open in new window and Copy sender's address; then Reply, Reply all, Forward, Mark as read or unread, Categorise, Follow up, Snooze, Move to…, Archive, Report spam, Delete, Create event, Create rule, Print and Save as PDF.
+- Text boxes everywhere (including the message editor) now have the usual right-click menu: spelling suggestions, Add to dictionary, Undo, Redo, Cut, Copy, Paste, Paste as plain text and Select all.
+
 ## 1.0.9 — 2026-10-26
 
 - The inbox tabs are now **Primary** and **Other**, matching Gmail's own name for the mail that lands in the first tab (Social, Promotions, Updates and Forums go in Other). If you choose to split by Gmail's Important marker instead, the first tab is called **Important**. The setting and the View button are now called "Inbox tabs".

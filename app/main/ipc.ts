@@ -1,5 +1,5 @@
 // Implements every method of the shared Api contract for the window.
-import { app, BrowserWindow, dialog, ipcMain, shell, type IpcMainInvokeEvent } from 'electron';
+import { app, BrowserWindow, clipboard, ClipboardItem, dialog, ipcMain, nativeImage, shell, type IpcMainInvokeEvent } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Api } from '../shared/api';
@@ -20,6 +20,29 @@ import { seedDemo } from './demo';
 import { manualSync, syncAccount, syncProgress } from './sync';
 import { openChildWindow, paramsFor, setTitleBarColour } from './windows';
 import { updateBadge } from './tray';
+
+const IMAGE_EXT: Record<string, string> = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp', 'image/bmp': 'bmp', 'image/svg+xml': 'svg' };
+
+/** The bytes of a picture shown in an email: an embedded (data:) picture, or one from the web once the user allowed pictures. */
+async function imageData(src: string): Promise<{ data: Buffer; ext: string; name: string }> {
+  let data: Buffer;
+  let type = '';
+  const m = /^data:([^;,]+)?(;base64)?,(.*)$/s.exec(src);
+  if (m) {
+    type = m[1] ?? '';
+    data = m[2] ? Buffer.from(m[3], 'base64') : Buffer.from(decodeURIComponent(m[3]));
+  } else if (/^https?:/i.test(src)) {
+    const res = await fetch(src);
+    if (!res.ok) throw new Error("That picture couldn't be downloaded.");
+    type = res.headers.get('content-type')?.split(';')[0] ?? '';
+    data = Buffer.from(await res.arrayBuffer());
+  } else throw new Error("That picture can't be saved.");
+  if (data.length > 30 * 1024 * 1024) throw new Error('That picture is too large.');
+  const ext = IMAGE_EXT[type] ?? (/\.(png|jpe?g|gif|webp|bmp|svg)(?:$|\?)/i.exec(src)?.[1].toLowerCase().replace('jpeg', 'jpg') ?? 'png');
+  const fromUrl = /^https?:/i.test(src) ? decodeURIComponent(new URL(src).pathname.split('/').pop() ?? '') : '';
+  const name = fromUrl && /\.[a-z0-9]{2,4}$/i.test(fromUrl) ? fromUrl.replace(/[\\/:*?"<>|]/g, '_') : `picture.${ext}`;
+  return { data, ext, name };
+}
 
 const MIME: Record<string, string> = {
   pdf: 'application/pdf', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', txt: 'text/plain', csv: 'text/csv',
@@ -79,6 +102,21 @@ const impl: Impl = {
     if (/^(https?|mailto):/i.test(url)) void shell.openExternal(url);
   },
   'app.openWindow': (_c, kind, params) => openChildWindow(kind, params),
+  'app.copyText': (_c, text) => clipboard.writeText(text),
+  'app.copyImage': async (_c, src) => {
+    const img = nativeImage.createFromBuffer((await imageData(src)).data);
+    if (img.isEmpty()) throw new Error("That picture couldn't be copied.");
+    await clipboard.write([new ClipboardItem({ 'image/png': new Blob([new Uint8Array(img.toPNG())], { type: 'image/png' }) })]);
+  },
+  'app.saveImage': async (c, src) => {
+    const { data, ext, name } = await imageData(src);
+    const win = BrowserWindow.fromWebContents(c.sender);
+    const opts = { defaultPath: path.join(app.getPath('downloads'), name), filters: [{ name: 'Picture', extensions: [ext] }] };
+    const r = win ? await dialog.showSaveDialog(win, opts) : await dialog.showSaveDialog(opts);
+    if (r.canceled || !r.filePath) return null;
+    fs.writeFileSync(r.filePath, data);
+    return r.filePath;
+  },
   'app.closeWindow': (c) => BrowserWindow.fromWebContents(c.sender)?.close(),
   'app.minimise': (c) => BrowserWindow.fromWebContents(c.sender)?.minimize(),
   'app.maximise': (c) => {

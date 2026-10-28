@@ -30,7 +30,7 @@ function buildTree(folders: Folder[]): TreeNode[] {
   return roots;
 }
 
-export function FolderPane() {
+export function FolderPane({ width }: { width?: number } = {}) {
   const { accounts, mail, openFolder, settings, updateSettings, openDialog } = useApp();
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [folders] = useLive(
@@ -142,7 +142,7 @@ export function FolderPane() {
   const unifiedCount = (id: string) => accounts.reduce((n, a) => n + ((folders[a.id] ?? []).find((f) => f.id === id)?.[id === 'DRAFT' ? 'total' : 'unread'] ?? 0), 0);
 
   return (
-    <nav className="pane folder-pane" aria-label="Folders">
+    <nav className="pane folder-pane" aria-label="Folders" style={width ? { flex: `0 0 ${width}px` } : undefined}>
       <div className="pane-heading">
         Favourites
         <button aria-label="New folder" title="New folder" onClick={() => openDialog('newFolder', { accountId: mail.accountId !== 'all' ? mail.accountId : accounts[0]?.id, parent: '' })}>

@@ -225,6 +225,17 @@ a { color: var(--accent); }
 .mail-split.bottom > .reading { min-height: 0; flex: 1 1 0; }
 .splitter { flex: 0 0 6px; cursor: row-resize; background: var(--border); border-top: 2px solid var(--surface); border-bottom: 2px solid var(--surface); }
 .splitter:hover, .splitter.dragging { background: var(--accent); }
+/* Vertical dividers sit over the panes' own borders: a wide, invisible grip that lights up on hover. */
+.splitter.x { flex: 0 0 7px; margin: 0 -3px; position: relative; z-index: 3; cursor: col-resize; background: transparent; border: 0; }
+.splitter.x::after { content: ''; position: absolute; top: 0; bottom: 0; left: 2px; width: 3px; background: transparent; transition: background 0.12s; }
+.splitter.x:hover::after, .splitter.x.dragging::after, .splitter.x:focus-visible::after { background: var(--accent); }
+.splitter.x:hover, .splitter.x.dragging { background: transparent; }
+.splitter:focus-visible { outline: none; }
+.splitter.y:focus-visible { background: var(--accent); }
+body.resizing iframe { pointer-events: none; }
+body.resizing { user-select: none; }
+body.resizing-x, body.resizing-x * { cursor: col-resize !important; }
+body.resizing-y, body.resizing-y * { cursor: row-resize !important; }
 :root[data-theme='dark'] .splitter { border-color: var(--surface); }
 .list-pane.off { flex: 1 1 auto; border-right: 0; }
 .list-head { display: flex; align-items: center; gap: 4px; padding: 6px 12px 0; border-bottom: 1px solid var(--border); flex: 0 0 auto; }

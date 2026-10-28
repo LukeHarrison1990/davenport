@@ -10,7 +10,8 @@ import { addrName, cx, groupLabel, listTime } from '../util';
 import { archive, del, flag, markRead, rowMenu, type Sel } from './actions';
 import { DRAG_MIME } from './FolderPane';
 
-export function MessageList({ folders, position, height }: { folders: Folder[]; position: 'right' | 'bottom' | 'off'; height?: number }) {
+export function MessageList({ folders, position, size }: { folders: Folder[]; position: 'right' | 'bottom' | 'off'; size?: number }) {
+  const sizeStyle = size ? (position === 'bottom' ? { height: size } : { flex: `0 0 ${size}px` }) : undefined;
   const { mail, tab, setTab, selected, select, search, accounts, settings } = useApp();
   const [oldestFirst, setOldestFirst] = useState(false);
   const [limit, setLimit] = useState(200);
@@ -167,7 +168,7 @@ export function MessageList({ folders, position, height }: { folders: Folder[]; 
 
   if (isScheduled) {
     return (
-      <section className={cx('list-pane', position)} style={height ? { height } : undefined} aria-label="Scheduled">
+      <section className={cx('list-pane', position)} style={sizeStyle} aria-label="Scheduled">
         <div className="list-head"><span className="title">Scheduled</span></div>
         <div className="list-scroll">
           {outbox.filter((o) => mail.accountId === 'all' || o.accountId === mail.accountId).map((o) => (
@@ -195,7 +196,7 @@ export function MessageList({ folders, position, height }: { folders: Folder[]; 
   }
 
   return (
-    <section className={cx('list-pane', position)} style={height ? { height } : undefined} aria-label={`Messages in ${mail.folderName}`}>
+    <section className={cx('list-pane', position)} style={sizeStyle} aria-label={`Messages in ${mail.folderName}`}>
       <div className="list-head">
         {showTabs ? (
           <div role="tablist" aria-label="Inbox view" style={{ display: 'flex' }}>

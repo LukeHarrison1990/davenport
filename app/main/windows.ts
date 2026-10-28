@@ -1,5 +1,5 @@
 // Window management: the main window plus pop-out compose, event and message windows.
-import { app, BrowserWindow, Menu, screen, shell } from 'electron';
+import { app, BrowserWindow, Menu, screen, shell, type MenuItemConstructorOptions } from 'electron';
 import path from 'node:path';
 import { kvGet, kvSet } from './db';
 import { getSettings } from './settings';
@@ -33,6 +33,33 @@ function secure(win: BrowserWindow): void {
       e.preventDefault();
       if (/^(https?|mailto):/i.test(url)) void shell.openExternal(url);
     }
+  });
+  // Electron has no right-click menu of its own. Davenport's panes show their own menus; text boxes
+  // (and any other selected text) get the standard Windows one, with spelling suggestions.
+  win.webContents.on('context-menu', (_e, p) => {
+    const items: MenuItemConstructorOptions[] = [];
+    if (p.isEditable) {
+      for (const word of p.dictionarySuggestions.slice(0, 5)) items.push({ label: word, click: () => win.webContents.replaceMisspelling(word) });
+      if (p.misspelledWord) {
+        if (!p.dictionarySuggestions.length) items.push({ label: 'No spelling suggestions', enabled: false });
+        items.push({ label: 'Add to dictionary', click: () => win.webContents.session.addWordToSpellCheckerDictionary(p.misspelledWord) });
+        items.push({ type: 'separator' });
+      }
+      items.push(
+        { role: 'undo', enabled: p.editFlags.canUndo },
+        { role: 'redo', enabled: p.editFlags.canRedo },
+        { type: 'separator' },
+        { role: 'cut', enabled: p.editFlags.canCut },
+        { role: 'copy', enabled: p.editFlags.canCopy },
+        { role: 'paste', enabled: p.editFlags.canPaste },
+        { role: 'pasteAndMatchStyle', label: 'Paste as plain text', enabled: p.editFlags.canPaste },
+        { type: 'separator' },
+        { role: 'selectAll' }
+      );
+    } else if (p.selectionText.trim()) {
+      items.push({ role: 'copy' });
+    }
+    if (items.length) Menu.buildFromTemplate(items).popup({ window: win });
   });
 }
 

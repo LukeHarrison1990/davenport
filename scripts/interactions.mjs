@@ -176,6 +176,52 @@ await check('Send / Receive shows progress, then says it finished', async () => 
   await win.locator('.statusbar', { hasText: 'Send/Receive complete' }).waitFor({ timeout: 6000 });
 });
 
+await check('folder pane and message list can be resized, and remember their size', async () => {
+  await api('settings.set', { readingPane: 'right' });
+  await win.waitForTimeout(300);
+  const drag = async (sel, dx) => {
+    const b = await win.locator(sel).first().boundingBox();
+    await win.mouse.move(b.x + b.width / 2, b.y + 200);
+    await win.mouse.down();
+    await win.mouse.move(b.x + b.width / 2 + dx, b.y + 200, { steps: 6 });
+    await win.mouse.up();
+  };
+  const fw = (await win.locator('.folder-pane').boundingBox()).width;
+  await drag('.splitter[aria-label="Resize folder pane"]', 80);
+  const fw2 = (await win.locator('.folder-pane').boundingBox()).width;
+  if (Math.abs(fw2 - fw - 80) > 4) throw new Error(`folder pane ${fw} -> ${fw2}`);
+  const lw = (await win.locator('.list-pane').boundingBox()).width;
+  await drag('.splitter[aria-label="Resize message list"]', -60);
+  const lw2 = (await win.locator('.list-pane').boundingBox()).width;
+  if (Math.abs(lw - lw2 - 60) > 4) throw new Error(`list ${lw} -> ${lw2}`);
+  const stored = await win.evaluate(() => [localStorage.getItem('dav.folderWidth'), localStorage.getItem('dav.listWidth')]);
+  if (Number(stored[0]) !== Math.round(fw2) || Number(stored[1]) !== Math.round(lw2)) throw new Error('not remembered: ' + stored);
+  // Double-click puts them back.
+  await win.locator('.splitter[aria-label="Resize folder pane"]').dblclick();
+  await win.locator('.splitter[aria-label="Resize message list"]').dblclick();
+  if (Math.round((await win.locator('.folder-pane').boundingBox()).width) !== 240) throw new Error('folder pane reset failed');
+});
+
+await check('right-clicking a message in the reading pane shows an Outlook-style menu', async () => {
+  await win.keyboard.press('Control+1');
+  await win.locator('#message-list .row').first().click();
+  const body = win.frameLocator('.reading iframe.message-frame').first().locator('body');
+  await body.click({ button: 'right', position: { x: 40, y: 20 } });
+  for (const name of ['Select all', 'Reply', 'Reply all', 'Forward', 'Mark as unread', 'Move to…', 'Delete', 'Print']) {
+    await win.getByRole('menuitem', { name: new RegExp('^' + name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')) }).first().waitFor({ timeout: 2000 });
+  }
+  await win.getByRole('menuitem', { name: /^Select all/ }).click();
+  await body.click({ button: 'right', position: { x: 40, y: 20 } });
+  await win.getByRole('menuitem', { name: /^Copy\b/ }).first().click();
+  await win.waitForTimeout(300);
+  const copied = await app.evaluate(async ({ clipboard }) => clipboard.readText());
+  if (!/revised Q4 figures/.test(copied)) throw new Error('clipboard: ' + copied.slice(0, 60));
+  // A click inside the message closes an open menu.
+  await body.click({ button: 'right', position: { x: 40, y: 20 } });
+  await body.click({ position: { x: 40, y: 60 } });
+  if (await win.getByRole('menuitem', { name: /^Reply all/ }).count()) throw new Error('menu stayed open');
+});
+
 await check('New mail split button offers other items', async () => {
   await win.locator('.split-more').first().click();
   await win.getByRole('menuitem', { name: 'Event' }).waitFor();

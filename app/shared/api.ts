@@ -12,6 +12,9 @@ export interface Api {
   'app.info'(): AppInfo;
   'app.openExternal'(url: string): void;
   'app.openWindow'(kind: 'compose' | 'event' | 'message', params: Record<string, string>): void;
+  'app.copyText'(text: string): void;
+  'app.copyImage'(src: string): void;
+  'app.saveImage'(src: string): string | null;
   'app.closeWindow'(): void;
   'app.pickFiles'(): { filename: string; mimeType: string; path: string; size: number }[];
   'app.windowParams'(): Record<string, string>;
