@@ -22,7 +22,24 @@ function load(win: BrowserWindow, hash = ''): void {
   else void win.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'), { hash });
 }
 
+/**
+ * Tells Windows which icon and app the window belongs to, straight from Davenport.exe. Without this the
+ * taskbar looks the icon up through the Start menu shortcut, and shows a blank page if Windows' icon
+ * cache or the shortcut is stale (which can happen after an update).
+ */
+function taskbarIdentity(win: BrowserWindow): void {
+  if (process.platform !== 'win32') return;
+  // The portable build runs from a temporary copy; point Windows at the file the user actually launched.
+  const exe = process.env.PORTABLE_EXECUTABLE_FILE || process.execPath;
+  try {
+    win.setAppDetails({ appId: 'app.davenport.desktop', appIconPath: exe, appIconIndex: 0, relaunchCommand: `"${exe}"`, relaunchDisplayName: 'Davenport' });
+  } catch {
+    /* not essential */
+  }
+}
+
 function secure(win: BrowserWindow): void {
+  taskbarIdentity(win);
   // Links never navigate the app; they open in the system browser.
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (/^(https?|mailto):/i.test(url)) void shell.openExternal(url);

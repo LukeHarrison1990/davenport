@@ -365,6 +365,73 @@ await check('tasks: add and complete', async () => {
   if (!all.find((t) => t.title === 'Order new toner')?.completed) throw new Error('task not completed');
 });
 
+const dragBy = async (sel, dx) => {
+  const b = await win.locator(sel).first().boundingBox();
+  await win.mouse.move(b.x + b.width / 2, b.y + 200);
+  await win.mouse.down();
+  await win.mouse.move(b.x + b.width / 2 + dx, b.y + 200, { steps: 6 });
+  await win.mouse.up();
+};
+const menuHas = async (...names) => {
+  for (const n of names) await win.getByRole('menuitem', { name: n }).first().waitFor({ timeout: 2000 });
+};
+
+await check('calendar: right-click menus for events and empty time, and a resizable pane', async () => {
+  await win.keyboard.press('Control+2');
+  await win.locator('.week .ev').first().click({ button: 'right' });
+  await menuHas(/^Open/, /^Copy details/);
+  await win.keyboard.press('Escape');
+  await win.locator('.day-col').first().click({ button: 'right', position: { x: 20, y: 30 } });
+  await menuHas(/^New event at/, /^New Google Meet meeting/, /^Out of office/);
+  await win.keyboard.press('Escape');
+  const w = (await win.locator('nav.folder-pane').boundingBox()).width;
+  await dragBy('.splitter[aria-label="Resize calendar pane"]', 50);
+  const w2 = (await win.locator('nav.folder-pane').boundingBox()).width;
+  if (Math.abs(w2 - w - 50) > 4) throw new Error(`calendar pane ${w} -> ${w2}`);
+  await win.locator('.splitter[aria-label="Resize calendar pane"]').dblclick();
+});
+
+await check('people: contact menu and resizable list', async () => {
+  await win.keyboard.press('Control+3');
+  await win.locator('.person').first().click({ button: 'right' });
+  await menuHas(/^Send email/, /^Schedule a meeting/, /^Copy/);
+  await win.keyboard.press('Escape');
+  const w = (await win.locator('.people-list').boundingBox()).width;
+  await dragBy('.splitter[aria-label="Resize people list"]', 60);
+  const w2 = (await win.locator('.people-list').boundingBox()).width;
+  if (Math.abs(w2 - w - 60) > 4) throw new Error(`people list ${w} -> ${w2}`);
+});
+
+await check('chat: copy a message from its right-click menu, and resize the list', async () => {
+  await win.keyboard.press('Control+4');
+  const msg = win.locator('.cmsg').first();
+  const text = (await msg.locator('p').first().textContent()).trim();
+  await msg.click({ button: 'right' });
+  await win.getByRole('menuitem', { name: /^Copy text/ }).click();
+  await win.waitForTimeout(300);
+  const copied = await app.evaluate(async ({ clipboard }) => clipboard.readText());
+  if (copied.trim() !== text) throw new Error(`copied "${copied}" not "${text}"`);
+  await win.locator('.conv').first().click({ button: 'right' });
+  await menuHas(/^Open$/, /^Turn into email/, /^Open in Google Chat/);
+  await win.keyboard.press('Escape');
+  const w = (await win.locator('.chat-list').boundingBox()).width;
+  await dragBy('.splitter[aria-label="Resize conversation list"]', 40);
+  const w2 = (await win.locator('.chat-list').boundingBox()).width;
+  if (Math.abs(w2 - w - 40) > 4) throw new Error(`chat list ${w} -> ${w2}`);
+});
+
+await check('tasks: complete a task from its right-click menu', async () => {
+  await win.keyboard.press('Control+5');
+  const item = win.locator('.task-item:not(.done)').first();
+  const title = (await item.locator('.t').textContent()).trim();
+  await item.click({ button: 'right' });
+  await win.getByRole('menuitem', { name: /^Mark complete/ }).click();
+  await win.waitForTimeout(500);
+  const all = await api('tasks.myDay');
+  const t = all.find((x) => x.title === title);
+  if (t && !t.completed) throw new Error('task not completed');
+});
+
 await check('keyboard: switch modules', async () => {
   await win.keyboard.press('Control+1');
   await win.locator('#message-list').waitFor();

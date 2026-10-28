@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.0.11 — 2026-10-28
+
+- Resizable panes everywhere: Calendar's side pane; People's address book pane and contact list; Chat's conversation list and thread panel; Tasks' list pane and task details. The left-hand pane keeps the same width in every module. Double-click a divider to reset it.
+- Right-click menus everywhere:
+  - Calendar events: Open, Join with Google Meet, Accept / Tentative / Decline, Email attendees, Copy details, Show as Busy or Free, Private, Open in Google Calendar, Delete. Empty time: New event, New Google Meet meeting, New all-day event, Out of office, Focus time. Calendars in the side pane: Show, Hide, Show only this calendar, Show all.
+  - People: Send email, Schedule a meeting, copy email addresses and phone numbers, Edit, add to or remove from groups, Add to contacts, Delete. Groups: Email group, Schedule a meeting with group, Copy email addresses.
+  - Chat: conversations (Open, Mark as read, Turn into email, Start a Meet call, Copy name, Open in Google Chat) and messages (Reply in thread, React, Copy text, Turn into email, Open in Google Chat).
+  - Tasks: Mark complete, Open, Due today / tomorrow / next week / no date, Open flagged email, Copy, Delete. Lists: Open, New task in this list.
+  - With text selected, every menu starts with Copy.
+- Fixed: Davenport's icon could show as a blank page on the Windows taskbar after updating. Each window now tells Windows to use the icon in Davenport.exe directly instead of relying on the Start menu shortcut.
+
 ## 1.0.10 — 2026-10-28
 
 - Every pane in Mail can be resized: drag the divider between the folder pane, message list, reading pane (right or bottom) and To-Do bar. Sizes are remembered; double-click a divider to put it back. Dividers also move with the arrow keys.

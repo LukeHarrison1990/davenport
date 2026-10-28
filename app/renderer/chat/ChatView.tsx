@@ -3,7 +3,9 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import type { Account, ChatMessage, ChatSpace, ChatStatus } from '../../shared/types';
 import { call, useLive } from '../api';
 import { Icon } from '../components/Icon';
+import { contextMenu, copyText } from '../components/contextMenu';
 import { openMenu, type MenuEntry } from '../components/Menu';
+import { Splitter, usePaneSize } from '../components/Splitter';
 import { Rail, Ribbon, StatusBar, TitleBar } from '../components/Shell';
 import { Avatar, Dialog, Empty, Field } from '../components/ui';
 import { fail, notify, useApp } from '../state';
@@ -28,6 +30,8 @@ export function ChatView() {
   const [thread, setThread] = useState<ChatMessage | null>(null);
   const [statuses] = useLive(() => call('chat.statuses'), ['chat', 'accounts'], [], [] as ChatStatus[]);
   const [editing, setEditing] = useState<ChatStatus | null>(null);
+  const [listWidth, setListWidth, saveListWidth] = usePaneSize('dav.chat.listWidth', 280);
+  const [threadWidth, setThreadWidth, saveThreadWidth] = usePaneSize('dav.chat.threadWidth', 340);
   const [collapsed, setCollapsed] = useState<string[]>(() => {
     try {
       return JSON.parse(localStorage.getItem('dav.chatCollapsed') ?? '[]') as string[];
@@ -77,7 +81,17 @@ export function ChatView() {
   }
 
   const conv = (s: ChatSpace) => (
-    <button key={s.accountId + s.id} className={cx('conv', s.unread > 0 && 'unread')} aria-current={current?.id === s.id && current.accountId === s.accountId} onClick={() => setCurrent(s)}>
+    <button key={s.accountId + s.id} className={cx('conv', s.unread > 0 && 'unread')} aria-current={current?.id === s.id && current.accountId === s.accountId} onClick={() => setCurrent(s)}
+      onContextMenu={contextMenu(() => [
+        { label: 'Open', icon: 'chat', onClick: () => setCurrent(s) },
+        { label: 'Mark as read', icon: 'read', disabled: !s.unread, onClick: () => void call('chat.markRead', s.accountId, s.id).catch(fail) },
+        { sep: true },
+        { label: 'Turn into email', icon: 'mail', onClick: () => void emailFromChat(s) },
+        { label: 'Start a Meet call', icon: 'video', onClick: () => void call('app.openExternal', 'https://meet.google.com/new') },
+        { label: 'Copy name', icon: 'copy', onClick: () => copyText(s.name, 'Name') },
+        { sep: true },
+        { label: 'Open in Google Chat', icon: 'globe', onClick: () => void call('chat.openInBrowser', s.accountId, s.id) }
+      ])}>
       {s.kind === 'space' ? (
         <span className="av" style={{ width: 28, height: 28, borderRadius: 6, background: 'var(--accent-soft)', color: 'var(--accent)', fontSize: 11 }}>{s.name.split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase()}</span>
       ) : (
@@ -98,14 +112,7 @@ export function ChatView() {
         ] },
         { label: 'Conversation', buttons: [
           { label: 'Start a Meet call', icon: 'video', onClick: () => call('app.openExternal', 'https://meet.google.com/new') },
-          { label: 'Turn into email', icon: 'mail', disabled: !current, onClick: async () => {
-            if (!current || !accounts[0]) return;
-            const msgs = await call('chat.messages', current.accountId, current.id);
-            const d = await call('mail.newDraft', current.accountId);
-            d.subject = current.name;
-            d.html = '<p>From our chat in ' + current.name + ':</p><blockquote>' + msgs.slice(-10).map((m) => `<p><b>${m.sender.name}</b>: ${m.text.replace(/</g, '&lt;')}</p>`).join('') + '</blockquote>' + d.html;
-            void call('app.openWindow', 'compose', { draft: JSON.stringify(d) });
-          } },
+          { label: 'Turn into email', icon: 'mail', disabled: !current, onClick: () => current && void emailFromChat(current) },
           { label: 'Open in Google Chat', icon: 'open', disabled: !current, onClick: () => current && call('chat.openInBrowser', current.accountId, current.id) },
           { label: 'Refresh', icon: 'sync', onClick: () => current && call('chat.refresh', current.accountId).catch(fail) }
         ] },
@@ -115,7 +122,7 @@ export function ChatView() {
       ]} />
       <div className="body">
         <Rail />
-        <nav className="pane chat-list" aria-label="Conversations">
+        <nav className="pane chat-list" aria-label="Conversations" style={{ flex: `0 0 ${listWidth}px` }}>
           {chatAccounts.map((a) => {
             const mine = visible.filter((s) => s.accountId === a.id);
             const dms = mine.filter((s) => s.kind !== 'space');
@@ -166,13 +173,49 @@ export function ChatView() {
             );
           })}
         </nav>
+        <Splitter dir="x" label="Resize conversation list" size={listWidth} setSize={setListWidth} onCommit={saveListWidth} min={220} max={520} reset={280} />
         {current ? <SpaceView key={current.accountId + current.id} space={current} onThread={setThread} /> : <div className="chat-main"><Empty icon="chat" title="Choose a conversation" /></div>}
-        {thread && current && <ThreadPanel space={current} root={thread} onClose={() => setThread(null)} />}
+        {thread && current && (
+          <>
+            <Splitter dir="x" invert label="Resize thread" size={threadWidth} setSize={setThreadWidth} onCommit={saveThreadWidth} min={260} max={640} reset={340} />
+            <ThreadPanel space={current} root={thread} width={threadWidth} onClose={() => setThread(null)} />
+          </>
+        )}
       </div>
       <StatusBar left={<span>{spaces.filter((s) => s.unread).length} unread conversations</span>} />
       {editing && <CustomStatusDialog status={editing} account={chatAccounts.find((a) => a.id === editing.accountId)} onClose={() => setEditing(null)} />}
     </>
   );
+}
+
+// ---------- Right-click menus ----------
+
+const escapeHtml = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+/** Starts an email quoting a conversation (its last ten messages) or one message from it. */
+async function emailFromChat(space: ChatSpace, only?: ChatMessage): Promise<void> {
+  try {
+    const msgs = only ? [only] : (await call('chat.messages', space.accountId, space.id)).slice(-10);
+    const d = await call('mail.newDraft', space.accountId);
+    d.subject = space.name;
+    d.html = '<p>From our chat in ' + escapeHtml(space.name) + ':</p><blockquote>' + msgs.map((m) => `<p><b>${escapeHtml(m.sender.name)}</b>: ${escapeHtml(m.text)}</p>`).join('') + '</blockquote>' + d.html;
+    void call('app.openWindow', 'compose', { draft: JSON.stringify(d) });
+  } catch (e) {
+    fail(e);
+  }
+}
+
+/** A chat message's menu: reply in thread, react, copy, email it, open on the web. */
+function messageMenu(space: ChatSpace, m: ChatMessage, reply?: () => void): MenuEntry[] {
+  return [
+    ...(reply && space.kind === 'space' ? [{ label: 'Reply in thread', icon: 'thread', onClick: reply } as MenuEntry] : []),
+    { label: 'React', icon: 'smile', submenu: REACTIONS.map((r) => ({ label: r, onClick: () => void call('chat.react', m.accountId, m.spaceId, m.id, r).catch(fail) })) },
+    { sep: true },
+    { label: 'Copy text', icon: 'copy', disabled: !m.text, onClick: () => copyText(m.text, 'Message') },
+    { label: 'Turn into email', icon: 'mail', onClick: () => void emailFromChat(space, m) },
+    { sep: true },
+    { label: 'Open in Google Chat', icon: 'globe', onClick: () => void call('chat.openInBrowser', space.accountId, space.id) }
+  ];
 }
 
 // ---------- Status ----------
@@ -357,7 +400,7 @@ function SpaceView({ space, onThread }: { space: ChatSpace; onThread: (m: ChatMe
         {grouped.map(({ m, newDay }) => (
           <Fragment key={m.id}>
             {newDay && <div className="day-sep">{sameDay(m.createTime, Date.now()) ? 'Today' : longDay(m.createTime)}</div>}
-            <div className="cmsg">
+            <div className="cmsg" onContextMenu={contextMenu(() => messageMenu(space, m, () => onThread(m)))}>
               <Avatar name={m.sender.name} email={m.sender.email ?? m.sender.id} size={36} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div><strong>{m.mine ? 'You' : m.sender.name}</strong> <span style={{ color: 'var(--muted)', fontSize: 12 }}>{time(m.createTime)}</span></div>
@@ -407,7 +450,7 @@ function SpaceView({ space, onThread }: { space: ChatSpace; onThread: (m: ChatMe
   );
 }
 
-function ThreadPanel({ space, root, onClose }: { space: ChatSpace; root: ChatMessage; onClose: () => void }) {
+function ThreadPanel({ space, root, width, onClose }: { space: ChatSpace; root: ChatMessage; width?: number; onClose: () => void }) {
   const [msgs] = useLive(() => (root.threadId ? call('chat.thread', space.accountId, space.id, root.threadId) : Promise.resolve([root])), ['chat'], [root.id], [] as ChatMessage[]);
   const [text, setText] = useState('');
   const send = async () => {
@@ -417,13 +460,13 @@ function ThreadPanel({ space, root, onClose }: { space: ChatSpace; root: ChatMes
     await call('chat.send', space.accountId, space.id, t, root.threadId).catch(fail);
   };
   return (
-    <aside className="side-panel" aria-label="Thread">
+    <aside className="side-panel" aria-label="Thread" style={width ? { flex: `0 0 ${width}px` } : undefined}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h2 style={{ margin: 0, fontSize: 15 }}>Thread</h2>
         <button className="icon-btn" aria-label="Close thread" onClick={onClose}><Icon name="close" /></button>
       </div>
       {msgs.map((m, i) => (
-        <div key={m.id} style={i === 0 ? { padding: 10, borderRadius: 8, background: 'var(--surface)', border: '1px solid var(--border-soft)' } : { padding: '0 10px' }}>
+        <div key={m.id} style={i === 0 ? { padding: 10, borderRadius: 8, background: 'var(--surface)', border: '1px solid var(--border-soft)' } : { padding: '0 10px' }} onContextMenu={contextMenu(() => messageMenu(space, m))}>
           <div><strong>{m.mine ? 'You' : m.sender.name}</strong> <span style={{ color: 'var(--muted)', fontSize: 12 }}>{time(m.createTime)}</span></div>
           <p style={{ margin: '4px 0 0', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{renderText(m.text)}</p>
         </div>

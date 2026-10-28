@@ -3,10 +3,13 @@ import { useEffect, useMemo, useState } from 'react';
 import type { Contact, ContactGroup } from '../../shared/types';
 import { call, useLive } from '../api';
 import { Icon } from '../components/Icon';
+import type { MenuEntry } from '../components/Menu';
+import { contextMenu, copyText } from '../components/contextMenu';
+import { Splitter, usePaneSize } from '../components/Splitter';
 import { Rail, Ribbon, StatusBar, TitleBar } from '../components/Shell';
 import { Avatar, Empty, Field } from '../components/ui';
 import { fail, notify, useApp } from '../state';
-import { newMail } from '../mail/actions';
+import { newMail, openCompose } from '../mail/actions';
 import { openEventEditor } from '../calendar/CalendarView';
 
 type Source = { kind: 'all' } | { kind: 'group'; accountId: string; id: string; name: string } | { kind: 'directory'; accountId: string };
@@ -19,6 +22,8 @@ export function PeopleView() {
   const [dirResults, setDirResults] = useState<Contact[]>([]);
   const [contacts] = useLive(() => (source.kind === 'group' ? call('people.list', source.accountId, source.id) : call('people.list', 'all')), ['people'], [JSON.stringify(source)], [] as Contact[]);
   const [groups] = useLive(() => call('people.groups', 'all'), ['people'], [], [] as ContactGroup[]);
+  const [paneWidth, setPaneWidth, savePaneWidth] = usePaneSize('dav.folderWidth', 240);
+  const [listWidth, setListWidth, saveListWidth] = usePaneSize('dav.people.listWidth', 340);
 
   useEffect(() => {
     const onNew = () => startNew();
@@ -60,6 +65,55 @@ export function PeopleView() {
 
   const startNew = () => setEditing({ accountId: accounts[0]?.id ?? '', id: '', name: '', emails: [''], phones: [''], groups: [], source: 'contacts' });
 
+  const scheduleWith = (people: Contact[]) => {
+    const s = new Date();
+    s.setMinutes(s.getMinutes() < 30 ? 30 : 60, 0, 0);
+    openEventEditor({ draft: { accountId: accounts[0]?.id, calendarId: 'primary', start: s.getTime(), end: s.getTime() + 30 * 60_000, allDay: false, attendees: people.filter((p) => p.emails[0]).map((p) => ({ email: p.emails[0], name: p.name, response: 'needsAction' as const })) } });
+  };
+  const emailPeople = async (people: Contact[], bcc = false) => {
+    if (!accounts[0]) return;
+    try {
+      const d = await call('mail.newDraft', accounts[0].id);
+      const to = people.filter((c) => c.emails[0]).map((c) => ({ name: c.name, email: c.emails[0] }));
+      if (bcc) d.bcc = to;
+      else d.to = to;
+      openCompose(d);
+    } catch (e) {
+      fail(e);
+    }
+  };
+  const remove = (c: Contact) => {
+    if (window.confirm(`Delete ${c.name} from your Google contacts?`)) void call('people.delete', c.accountId, c.id).then(() => setSelected(null)).catch(fail);
+  };
+  const setGroup = (c: Contact, groupId: string, member: boolean) =>
+    void call('people.save', { ...c, groups: member ? [...c.groups, groupId] : c.groups.filter((g) => g !== groupId) })
+      .then(() => notify(member ? 'Added to group' : 'Removed from group'))
+      .catch(fail);
+
+  /** Outlook's contact menu: email, meet, copy details, edit, groups, delete. */
+  const personMenu = (c: Contact): MenuEntry[] => {
+    const items: MenuEntry[] = [];
+    if (c.emails[0]) {
+      items.push(
+        { label: 'Send email', icon: 'mail', onClick: () => void newMail(undefined, c.emails[0]) },
+        { label: 'Schedule a meeting', icon: 'calendar', onClick: () => scheduleWith([c]) },
+        { sep: true },
+        ...c.emails.filter(Boolean).map((e): MenuEntry => ({ label: c.emails.length > 1 ? `Copy ${e}` : 'Copy email address', icon: 'copy', onClick: () => copyText(e, 'Email address') }))
+      );
+    }
+    for (const ph of c.phones.filter(Boolean)) items.push({ label: `Copy ${ph}`, icon: 'phone', onClick: () => copyText(ph, 'Phone number') });
+    items.push({ sep: true });
+    if (c.source === 'contacts') {
+      items.push({ label: 'Edit contact', icon: 'edit', onClick: () => { setSelected(c); setEditing(c); } });
+      const mine = groups.filter((g) => g.accountId === c.accountId);
+      if (mine.length) items.push({ label: 'Groups', icon: 'people', submenu: mine.map((g) => ({ label: g.name, checked: c.groups.includes(g.id), onClick: () => setGroup(c, g.id, !c.groups.includes(g.id)) })) });
+      items.push({ sep: true }, { label: 'Delete contact', icon: 'trash', danger: true, onClick: () => remove(c) });
+    } else {
+      items.push({ label: 'Add to contacts', icon: 'plus', onClick: () => { setSelected(c); setEditing({ ...c, id: '', source: 'contacts', accountId: accounts[0]?.id ?? c.accountId }); } });
+    }
+    return items;
+  };
+
   const letters = useMemo(() => {
     const m = new Map<string, Contact[]>();
     for (const c of list) {
@@ -98,19 +152,31 @@ export function PeopleView() {
         { label: 'Manage', buttons: [
           { label: 'Edit', icon: 'edit', disabled: !selected || selected.source !== 'contacts', onClick: () => selected && setEditing(selected) },
           { label: 'Delete', icon: 'trash', disabled: !selected || selected.source !== 'contacts', onClick: () => {
-            if (selected && window.confirm(`Delete ${selected.name} from your Google contacts?`)) void call('people.delete', selected.accountId, selected.id).then(() => setSelected(null)).catch(fail);
+            if (selected) remove(selected);
           } },
           { label: 'Add to contacts', icon: 'plus', disabled: !selected || selected.source === 'contacts', onClick: () => selected && setEditing({ ...selected, id: '', source: 'contacts', accountId: accounts[0]?.id ?? selected.accountId }) }
         ] }
       ]} />
       <div className="body">
         <Rail />
-        <nav className="pane folder-pane" aria-label="Address books">
+        <nav className="pane folder-pane" aria-label="Address books" style={{ flex: `0 0 ${paneWidth}px` }}>
           <div className="pane-heading">Contacts</div>
           <button className="folder" aria-current={source.kind === 'all'} onClick={() => setSource({ kind: 'all' })}><span className="twisty" /><Icon name="people" size={15} /><span className="name">All contacts</span></button>
           {groups.length > 0 && <div className="pane-heading" style={{ marginTop: 12 }}>Groups</div>}
           {groups.map((g) => (
-            <button key={g.accountId + g.id} className="folder" aria-current={source.kind === 'group' && source.id === g.id} onClick={() => setSource({ kind: 'group', accountId: g.accountId, id: g.id, name: g.name })}>
+            <button key={g.accountId + g.id} className="folder" aria-current={source.kind === 'group' && source.id === g.id} onClick={() => setSource({ kind: 'group', accountId: g.accountId, id: g.id, name: g.name })}
+              onContextMenu={contextMenu(() => {
+                const members = contacts.filter((c) => c.groups.includes(g.id) && c.accountId === g.accountId);
+                return [
+                  { label: 'Open', icon: 'people', onClick: () => setSource({ kind: 'group', accountId: g.accountId, id: g.id, name: g.name }) },
+                  { sep: true },
+                  { label: 'Email group', icon: 'mail', disabled: !members.length, onClick: () => void emailPeople(members, true) },
+                  { label: 'Schedule a meeting with group', icon: 'calendar', disabled: !members.length, onClick: () => scheduleWith(members) },
+                  { label: 'Copy email addresses', icon: 'copy', disabled: !members.length, onClick: () => copyText(members.filter((c) => c.emails[0]).map((c) => c.emails[0]).join('; '), 'Email addresses') },
+                  { sep: true },
+                  { label: 'Manage groups in Google Contacts', icon: 'globe', onClick: () => void call('app.openExternal', 'https://contacts.google.com/') }
+                ];
+              })}>
               <span className="twisty" /><Icon name="people" size={15} /><span className="name">{g.name}</span><span className="count items">{g.count}</span>
             </button>
           ))}
@@ -121,7 +187,8 @@ export function PeopleView() {
             </button>
           ))}
         </nav>
-        <section className="people-list" aria-label="People">
+        <Splitter dir="x" label="Resize address book pane" size={paneWidth} setSize={setPaneWidth} onCommit={savePaneWidth} min={180} max={420} reset={240} />
+        <section className="people-list" aria-label="People" style={{ flex: `0 0 ${listWidth}px` }}>
           <div className="list-head">
             <span className="title">{source.kind === 'all' ? 'All contacts' : source.kind === 'group' ? source.name : 'Organisation directory'}</span>
             {source.kind === 'directory' && (
@@ -138,7 +205,8 @@ export function PeopleView() {
               <div key={l}>
                 <div className="group-label">{l}</div>
                 {cs.map((c) => (
-                  <button key={c.accountId + c.id} className="person" aria-selected={selected?.id === c.id && selected.accountId === c.accountId} onClick={() => { setSelected(c); setEditing(null); }}>
+                  <button key={c.accountId + c.id} className="person" aria-selected={selected?.id === c.id && selected.accountId === c.accountId} onClick={() => { setSelected(c); setEditing(null); }}
+                    onContextMenu={(e) => { setSelected(c); setEditing(null); contextMenu(() => personMenu(c))(e); }}>
                     <Avatar name={c.name} email={c.emails[0]} size={34} photo={c.photoUrl} />
                     <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
                       <span style={{ fontWeight: 600 }}>{c.name}</span>
@@ -156,7 +224,8 @@ export function PeopleView() {
             {!list.length && (source.kind !== 'directory' || search) && <Empty icon="people" title={search ? 'No matches' : 'No contacts'} />}
           </div>
         </section>
-        <div className="detail">
+        <Splitter dir="x" label="Resize people list" size={listWidth} setSize={setListWidth} onCommit={saveListWidth} min={240} max={600} reset={340} />
+        <div className="detail" onContextMenu={contextMenu(() => (selected && !editing ? personMenu(selected) : []))}>
           {editing ? <ContactEditor c={editing} groups={groups} onDone={(saved) => { setEditing(null); if (saved) setSelected(saved); }} /> : selected ? <ContactCard c={selected} groups={groups} /> : <Empty icon="person" title="Select a person" />}
         </div>
       </div>

@@ -3,9 +3,13 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CalEvent, CalendarInfo } from '../../shared/types';
 import { call, useLive } from '../api';
 import { Icon } from '../components/Icon';
+import { contextMenu, copyText } from '../components/contextMenu';
+import type { MenuEntry } from '../components/Menu';
 import { MiniCalendar } from '../components/MiniCalendar';
 import { Rail, Ribbon, StatusBar, TitleBar } from '../components/Shell';
+import { Splitter, usePaneSize } from '../components/Splitter';
 import { Dialog, Field } from '../components/ui';
+import { openCompose } from '../mail/actions';
 import { fail, notify, useApp } from '../state';
 import { addDays, cx, dayName, longDay, monthYear, rangeTitle, sameDay, startOfDay, startOfWeek, time } from '../util';
 
@@ -44,6 +48,7 @@ export function CalendarView() {
   const [events] = useLive(() => call('calendar.events', r.start - 864e5, r.end + 864e5), ['calendar'], [r.start, r.end], [] as CalEvent[]);
   const [cals] = useLive(() => call('calendar.calendars'), ['calendar', 'accounts'], [], [] as CalendarInfo[]);
   const [peek, setPeek] = useState<{ ev: CalEvent; x: number; y: number } | null>(null);
+  const [paneWidth, setPaneWidth, savePaneWidth] = usePaneSize('dav.folderWidth', 240);
 
   const step = (dir: number) => {
     if (view === 'day') setCalDate(addDays(calDate, dir));
@@ -121,10 +126,11 @@ export function CalendarView() {
       />
       <div className="body">
         <Rail />
-        <nav className="pane folder-pane" aria-label="Calendars" style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <nav className="pane folder-pane" aria-label="Calendars" style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 14, flex: `0 0 ${paneWidth}px` }}>
           <MiniCalendar value={calDate} onPick={setCalDate} rangeStart={r.start} rangeEnd={view === 'month' || view === 'schedule' ? undefined : r.end} busyDays={busyDays} />
           <CalendarList cals={cals} />
         </nav>
+        <Splitter dir="x" label="Resize calendar pane" size={paneWidth} setSize={setPaneWidth} onCommit={savePaneWidth} min={200} max={480} reset={240} />
         <main className="cal-main" aria-label={title}>
           <div className="cal-head">
             <button className="icon-btn" aria-label="Previous" onClick={() => step(-1)}><Icon name="chevLeft" /></button>
@@ -137,9 +143,9 @@ export function CalendarView() {
             <span className="cal-legend"><span className="sw" style={{ border: '1px dashed var(--muted)' }} />Not yet answered</span>
           </div>
           {(view === 'day' || view === 'week' || view === 'workweek') && (
-            <WeekView days={r.days} events={events} onPeek={(ev, x, y) => setPeek({ ev, x, y })} onCreate={(s, e, allDay) => openEventEditor({ draft: defaultDraft(s, e, allDay) })} />
+            <WeekView days={r.days} events={events} onPeek={(ev, x, y) => setPeek({ ev, x, y })} onCreate={(s, e, allDay, extra) => openEventEditor({ draft: { ...defaultDraft(s, e, allDay), ...extra } })} />
           )}
-          {view === 'month' && <MonthView days={r.days} month={new Date(calDate).getMonth()} events={events} onPeek={(ev, x, y) => setPeek({ ev, x, y })} onDay={(d) => { setCalDate(d); setView('day'); }} />}
+          {view === 'month' && <MonthView days={r.days} month={new Date(calDate).getMonth()} events={events} onPeek={(ev, x, y) => setPeek({ ev, x, y })} onDay={(d) => { setCalDate(d); setView('day'); }} onCreate={(s, e, allDay) => openEventEditor({ draft: defaultDraft(s, e, allDay) })} />}
           {view === 'schedule' && <ScheduleView days={r.days} events={events} onPeek={(ev, x, y) => setPeek({ ev, x, y })} />}
         </main>
       </div>
@@ -161,7 +167,13 @@ function CalendarList({ cals }: { cals: CalendarInfo[] }) {
             <div key={label} style={{ marginBottom: 10 }}>
               <div className="pane-heading" style={{ padding: '2px 0 4px' }}>{label}</div>
               {list.map((c) => (
-                <label key={c.id} className="check" style={{ margin: '4px 0' }}>
+                <label key={c.id} className="check" style={{ margin: '4px 0' }} onContextMenu={contextMenu(() => [
+                  { label: c.selected ? 'Hide calendar' : 'Show calendar', icon: c.selected ? 'close' : 'check', onClick: () => void call('calendar.setSelected', c.accountId, c.id, !c.selected) },
+                  { label: 'Show only this calendar', icon: 'calendar', onClick: () => { for (const o of cals) void call('calendar.setSelected', o.accountId, o.id, o.id === c.id && o.accountId === c.accountId); } },
+                  { label: 'Show all calendars', icon: 'grid', onClick: () => { for (const o of cals) if (!o.selected) void call('calendar.setSelected', o.accountId, o.id, true); } },
+                  { sep: true },
+                  { label: 'Calendar settings in Google', icon: 'open', onClick: () => void call('app.openExternal', `https://calendar.google.com/calendar/r/settings/calendar/${btoa(c.id).replace(/=+$/, '')}`) }
+                ])}>
                   <input type="checkbox" checked={c.selected} style={{ accentColor: c.color }} onChange={(e) => call('calendar.setSelected', c.accountId, c.id, e.target.checked)} />
                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name}</span>
                 </label>
@@ -238,7 +250,7 @@ function evStyle(ev: CalEvent): React.CSSProperties {
   return { background: c + '26', borderLeft: `3px solid ${c}`, color: 'var(--text)' };
 }
 
-function WeekView({ days, events, onPeek, onCreate }: { days: number[]; events: CalEvent[]; onPeek: (e: CalEvent, x: number, y: number) => void; onCreate: (s: number, e: number, allDay?: boolean) => void }) {
+function WeekView({ days, events, onPeek, onCreate }: { days: number[]; events: CalEvent[]; onPeek: (e: CalEvent, x: number, y: number) => void; onCreate: (s: number, e: number, allDay?: boolean, extra?: Partial<CalEvent>) => void }) {
   const { settings } = useApp();
   const scroller = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState<{ day: number; from: number; to: number } | null>(null);
@@ -301,9 +313,9 @@ function WeekView({ days, events, onPeek, onCreate }: { days: number[]; events: 
       <div className="week-allday" style={{ gridTemplateColumns: cols }}>
         <div className="gutter">All day</div>
         {days.map((d) => (
-          <div key={d} onDoubleClick={() => onCreate(d, addDays(d, 1), true)}>
+          <div key={d} onDoubleClick={() => onCreate(d, addDays(d, 1), true)} onContextMenu={contextMenu(() => slotMenu(d, true, onCreate))}>
             {allDay(d).filter((e) => e.eventType !== 'workingLocation').map((e) => (
-              <button key={e.accountId + e.id} className="allday-ev" style={{ background: (e.eventType === 'outOfOffice' ? '#7A4E9C' : e.color ?? '#1F3A5F') + '30', color: 'var(--text)' }} onClick={(ev) => onPeek(e, ev.clientX, ev.clientY)}>
+              <button key={e.accountId + e.id} className="allday-ev" style={{ background: (e.eventType === 'outOfOffice' ? '#7A4E9C' : e.color ?? '#1F3A5F') + '30', color: 'var(--text)' }} onClick={(ev) => onPeek(e, ev.clientX, ev.clientY)} onContextMenu={contextMenu(() => eventMenu(e))}>
                 {e.title}
               </button>
             ))}
@@ -335,6 +347,11 @@ function WeekView({ days, events, onPeek, onCreate }: { days: number[]; events: 
                 key={d}
                 className={cx('day-col', isToday && 'today')}
                 style={{ backgroundImage: 'repeating-linear-gradient(to bottom, var(--border-soft) 0 1px, transparent 1px ' + HOUR + 'px)' }}
+                onContextMenu={(e) => {
+                  if ((e.target as HTMLElement).closest('.ev')) return;
+                  const at = d + Math.floor(minutesAt(e.clientY, e.currentTarget) / 30) * 30 * 60_000;
+                  contextMenu(() => slotMenu(at, false, onCreate))(e);
+                }}
                 onMouseDown={(e) => {
                   if ((e.target as HTMLElement).closest('.ev') || e.button !== 0) return;
                   const m = minutesAt(e.clientY, e.currentTarget);
@@ -384,6 +401,7 @@ function WeekView({ days, events, onPeek, onCreate }: { days: number[]; events: 
                         onPeek(p.ev, e.clientX, e.clientY);
                       }}
                       onDoubleClick={() => openEventEditor({ event: p.ev })}
+                      onContextMenu={contextMenu(() => eventMenu(p.ev))}
                     >
                       <span className="t">{p.ev.title}</span>
                       {p.height > 30 && <span className="m">{time(p.ev.start)}–{time(p.ev.end)}{p.ev.location ? ' · ' + p.ev.location : p.ev.meetUrl ? ' · Meet' : ''}</span>}
@@ -414,7 +432,7 @@ function WeekView({ days, events, onPeek, onCreate }: { days: number[]; events: 
 
 // ---------- Month ----------
 
-function MonthView({ days, month, events, onPeek, onDay }: { days: number[]; month: number; events: CalEvent[]; onPeek: (e: CalEvent, x: number, y: number) => void; onDay: (d: number) => void }) {
+function MonthView({ days, month, events, onPeek, onDay, onCreate }: { days: number[]; month: number; events: CalEvent[]; onPeek: (e: CalEvent, x: number, y: number) => void; onDay: (d: number) => void; onCreate: (s: number, e: number, allDay?: boolean, extra?: Partial<CalEvent>) => void }) {
   return (
     <div className="month">
       {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map((d) => <div key={d} className="dow-h">{d}</div>)}
@@ -422,10 +440,10 @@ function MonthView({ days, month, events, onPeek, onDay }: { days: number[]; mon
         const evs = events.filter((e) => e.eventType !== 'workingLocation' && e.start < addDays(d, 1) && e.end > d).sort((a, b) => Number(b.allDay) - Number(a.allDay) || a.start - b.start);
         const shown = evs.slice(0, 4);
         return (
-          <div key={d} className={cx('cell', new Date(d).getMonth() !== month && 'other', sameDay(d, Date.now()) && 'today')} onDoubleClick={() => onDay(d)}>
+          <div key={d} className={cx('cell', new Date(d).getMonth() !== month && 'other', sameDay(d, Date.now()) && 'today')} onDoubleClick={() => onDay(d)} onContextMenu={contextMenu(() => [...slotMenu(d + 9 * 3600_000, false, onCreate, true), { sep: true }, { label: 'Go to day', icon: 'calendar', onClick: () => onDay(d) }])}>
             <button className="n" onClick={() => onDay(d)} aria-label={longDay(d)}>{new Date(d).getDate()}</button>
             {shown.map((e) => (
-              <button key={e.accountId + e.id} className="mev" onClick={(ev) => onPeek(e, ev.clientX, ev.clientY)} style={e.allDay ? { background: (e.color ?? '#1F3A5F') + '30' } : undefined}>
+              <button key={e.accountId + e.id} className="mev" onClick={(ev) => onPeek(e, ev.clientX, ev.clientY)} onContextMenu={contextMenu(() => eventMenu(e))} style={e.allDay ? { background: (e.color ?? '#1F3A5F') + '30' } : undefined}>
                 {!e.allDay && <span className="d" style={{ background: e.color ?? 'var(--accent)' }} />}
                 <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{!e.allDay && <b style={{ fontWeight: 600 }}>{time(e.start)} </b>}{e.title}</span>
               </button>
@@ -453,7 +471,7 @@ function ScheduleView({ days, events, onPeek }: { days: number[]; events: CalEve
             <h3 style={sameDay(d, Date.now()) ? { color: 'var(--accent)' } : undefined}>{longDay(d)}</h3>
             <div>
               {evs.map((e) => (
-                <button key={e.accountId + e.id} className="item" onClick={(ev) => onPeek(e, ev.clientX, ev.clientY)}>
+                <button key={e.accountId + e.id} className="item" onClick={(ev) => onPeek(e, ev.clientX, ev.clientY)} onContextMenu={contextMenu(() => eventMenu(e))}>
                   <span style={{ width: 110, color: 'var(--muted)' }}>{e.allDay ? 'All day' : `${time(e.start)}–${time(e.end)}`}</span>
                   <span className="dot" style={{ background: e.color ?? 'var(--accent)', marginTop: 4 }} />
                   <span><b>{e.title}</b>{e.location ? <span style={{ color: 'var(--muted)' }}> · {e.location}</span> : null}</span>
@@ -465,6 +483,85 @@ function ScheduleView({ days, events, onPeek }: { days: number[]; events: CalEve
       })}
     </div>
   );
+}
+
+// ---------- Right-click menus ----------
+
+/** Deletes an event after confirming, asking about the series for repeating events. */
+function deleteEvent(ev: CalEvent, after?: () => void): void {
+  const guests = ev.attendees.filter((a) => !a.resource && !a.self).length;
+  const scope = ev.recurringEventId ? (window.confirm('Delete the whole series? Choose Cancel to delete just this one.') ? 'all' : 'this') : 'this';
+  if (!ev.recurringEventId && !window.confirm(`Delete "${ev.title}"?${guests ? ' Guests will be told it is cancelled.' : ''}`)) return;
+  void call('calendar.delete', ev.accountId, ev.calendarId, ev.id, scope).then(() => after?.()).catch(fail);
+}
+
+function eventDetails(ev: CalEvent): string {
+  const when = ev.allDay ? `${longDay(ev.start)}${ev.end - ev.start > 864e5 ? ' – ' + longDay(ev.end - 1) : ''} (all day)` : `${longDay(ev.start)}, ${time(ev.start)}–${time(ev.end)}`;
+  return [ev.title, when, ev.location, ev.meetUrl && `Google Meet: ${ev.meetUrl}`].filter(Boolean).join('\n');
+}
+
+async function emailAttendees(ev: CalEvent): Promise<void> {
+  try {
+    const d = await call('mail.newDraft', ev.accountId);
+    d.to = ev.attendees.filter((a) => !a.resource && !a.self).map((a) => ({ name: a.name, email: a.email }));
+    d.subject = ev.title;
+    openCompose(d);
+  } catch (e) {
+    fail(e);
+  }
+}
+
+/** Outlook's appointment menu: open, join, respond, email guests, show as, privacy, delete. */
+function eventMenu(ev: CalEvent): MenuEntry[] {
+  const guests = ev.attendees.filter((a) => !a.resource && !a.self);
+  const invited = !!(ev.myResponse && ev.organizer && !ev.canEdit);
+  const respond = (r: 'accepted' | 'tentative' | 'declined', said: string) =>
+    void call('calendar.respond', ev.accountId, ev.calendarId, ev.id, r).then(() => notify(said)).catch(fail);
+  const update = (patch: Partial<CalEvent>, said: string) =>
+    void call('calendar.save', { event: { ...ev, ...patch }, scope: 'this', notify: false }).then(() => notify(said)).catch(fail);
+  const items: MenuEntry[] = [{ label: ev.canEdit ? 'Open' : 'Open (read only)', icon: 'open', onClick: () => openEventEditor({ event: ev }) }];
+  if (ev.meetUrl) items.push({ label: 'Join with Google Meet', icon: 'video', onClick: () => void call('app.openExternal', ev.meetUrl!) });
+  if (invited) {
+    items.push(
+      { sep: true },
+      { label: 'Accept', icon: 'check', checked: ev.myResponse === 'accepted', onClick: () => respond('accepted', 'Accepted') },
+      { label: 'Tentative', checked: ev.myResponse === 'tentative', onClick: () => respond('tentative', 'Marked as tentative') },
+      { label: 'Decline', icon: 'close', checked: ev.myResponse === 'declined', onClick: () => respond('declined', 'Declined') }
+    );
+  }
+  items.push({ sep: true });
+  if (guests.length) items.push({ label: 'Email attendees', icon: 'mail', onClick: () => void emailAttendees(ev) });
+  items.push({ label: 'Copy details', icon: 'copy', onClick: () => copyText(eventDetails(ev), 'Event details') });
+  if (ev.canEdit && ev.eventType === 'default') {
+    items.push(
+      { label: 'Show as', icon: 'clock', submenu: [
+        { label: 'Busy', checked: ev.transparency !== 'transparent', onClick: () => update({ transparency: 'opaque' }, 'Shown as busy') },
+        { label: 'Free', checked: ev.transparency === 'transparent', onClick: () => update({ transparency: 'transparent' }, 'Shown as free') }
+      ] },
+      { label: 'Private', icon: 'user', checked: ev.visibility === 'private', onClick: () => update({ visibility: ev.visibility === 'private' ? 'default' : 'private' }, ev.visibility === 'private' ? 'No longer private' : 'Marked as private') }
+    );
+  }
+  if (ev.htmlLink) items.push({ label: 'Open in Google Calendar', icon: 'globe', onClick: () => void call('app.openExternal', ev.htmlLink!) });
+  if (ev.canEdit) items.push({ sep: true }, { label: 'Delete', icon: 'trash', danger: true, onClick: () => deleteEvent(ev) });
+  return items;
+}
+
+/** Right-clicking an empty time slot or day. */
+function slotMenu(at: number, allDay: boolean, onCreate: (s: number, e: number, allDay?: boolean, extra?: Partial<CalEvent>) => void, wholeDayToo = false): MenuEntry[] {
+  const day = startOfDay(at);
+  const items: MenuEntry[] = allDay
+    ? [{ label: 'New all-day event', icon: 'plus', onClick: () => onCreate(day, addDays(day, 1), true) }]
+    : [
+        { label: `New event at ${time(at)}`, icon: 'plus', onClick: () => onCreate(at, at + 30 * 60_000) },
+        { label: 'New Google Meet meeting', icon: 'video', onClick: () => onCreate(at, at + 30 * 60_000, false, { meetUrl: 'new' }) }
+      ];
+  if (!allDay && wholeDayToo) items.push({ label: 'New all-day event', icon: 'calendar', onClick: () => onCreate(day, addDays(day, 1), true) });
+  items.push(
+    { sep: true },
+    { label: 'Out of office…', icon: 'plane', onClick: () => onCreate(day, addDays(day, 1), true, { title: 'Out of office', eventType: 'outOfOffice', autoDecline: true }) },
+    { label: 'Focus time…', icon: 'focus', onClick: () => onCreate(allDay ? day + 9 * 3600_000 : at, (allDay ? day + 9 * 3600_000 : at) + 2 * 3600_000, false, { title: 'Focus time', eventType: 'focusTime', autoDecline: true }) }
+  );
+  return items;
 }
 
 // ---------- Peek ----------
@@ -528,11 +625,7 @@ function EventPeek({ ev, x, y, onClose }: { ev: CalEvent; x: number; y: number; 
       <div className="rsvp">
         <button className="btn small" onClick={() => { openEventEditor({ event: ev }); onClose(); }}><Icon name="edit" /> {ev.canEdit ? 'Edit' : 'Open'}</button>
         {ev.canEdit && (
-          <button className="btn small danger" onClick={() => {
-            const scope = ev.recurringEventId ? (window.confirm('Delete the whole series? Choose Cancel to delete just this one.') ? 'all' : 'this') : 'this';
-            if (!ev.recurringEventId && !window.confirm(`Delete "${ev.title}"?${others.length ? ' Guests will be told it is cancelled.' : ''}`)) return;
-            void call('calendar.delete', ev.accountId, ev.calendarId, ev.id, scope).then(onClose).catch(fail);
-          }}><Icon name="trash" /> Delete</button>
+          <button className="btn small danger" onClick={() => deleteEvent(ev, onClose)}><Icon name="trash" /> Delete</button>
         )}
         {ev.htmlLink && <button className="btn small ghost" onClick={() => call('app.openExternal', ev.htmlLink!)}>Open in Google</button>}
       </div>
