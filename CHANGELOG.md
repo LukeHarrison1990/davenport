@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.12 — 2026-10-29
+
+- Menus behave like Windows menus: hovering over an item with ▸ opens its submenu beside the menu, which stays open. Moving to another item closes it again. With the keyboard, Right opens a submenu and Left or Esc goes back. Long menus no longer need scrolling.
+- Fixed: Davenport's icon could appear as a blank page on the taskbar. The program's icon is now stored the way Windows expects (classic bitmaps for the small sizes, PNG only at 256×256); some parts of Windows can't draw small PNG icons from a program file. `scripts/make-ico.py` rebuilds the .ico files from the PNG renders.
+
 ## 1.0.11 — 2026-10-28
 
 - Resizable panes everywhere: Calendar's side pane; People's address book pane and contact list; Chat's conversation list and thread panel; Tasks' list pane and task details. The left-hand pane keeps the same width in every module. Double-click a divider to reset it.

@@ -341,11 +341,11 @@ body.resizing-y, body.resizing-y * { cursor: row-resize !important; }
 
 /* ---------- Overlays ---------- */
 .menu {
-  position: fixed; z-index: 1000; min-width: 200px; max-width: 340px; max-height: 70vh; overflow: auto; background: var(--surface); border: 1px solid var(--border);
+  position: fixed; z-index: 1000; min-width: 200px; max-width: 340px; max-height: calc(100vh - 16px); overflow: auto; background: var(--surface); border: 1px solid var(--border);
   border-radius: 8px; box-shadow: var(--shadow); padding: 4px; font-size: 13px;
 }
 .menu-item { display: flex; align-items: center; gap: 10px; width: 100%; padding: 7px 10px; border: 0; background: transparent; border-radius: 4px; text-align: left; color: var(--text); min-height: 32px; }
-.menu-item:hover, .menu-item:focus { background: var(--accent-tint); outline: none; }
+.menu-item:hover, .menu-item:focus, .menu-item.open { background: var(--accent-tint); outline: none; }
 .menu-item .hint { margin-left: auto; color: var(--muted); font-size: 12px; }
 .menu-item:disabled { color: var(--faint); }
 .menu-sep { height: 1px; background: var(--border-soft); margin: 4px 0; }

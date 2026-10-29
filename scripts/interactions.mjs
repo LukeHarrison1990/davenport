@@ -228,6 +228,31 @@ await check('New mail split button offers other items', async () => {
   await win.keyboard.press('Escape');
 });
 
+await check('submenus open beside their menu on hover, keeping the parent menu open', async () => {
+  await win.keyboard.press('Control+1');
+  await win.locator('#message-list .row').first().click({ button: 'right' });
+  const parent = win.locator('.menu[data-level="0"]');
+  await parent.waitFor();
+  await win.getByRole('menuitem', { name: /^Follow up/ }).hover();
+  const sub = win.locator('.menu[data-level="1"]');
+  await sub.waitFor({ timeout: 2000 });
+  if (!(await parent.isVisible())) throw new Error('parent menu was hidden');
+  const pb = await parent.boundingBox();
+  const sb = await sub.boundingBox();
+  if (!(sb.x >= pb.x + pb.width - 12 || sb.x + sb.width <= pb.x + 12)) throw new Error('submenu overlaps its menu');
+  // Moving to an ordinary item closes the submenu again.
+  await win.getByRole('menuitem', { name: /^Reply all/ }).hover();
+  await sub.waitFor({ state: 'detached', timeout: 2000 });
+  // Keyboard: Right opens, Left goes back.
+  await win.getByRole('menuitem', { name: /^Follow up/ }).focus();
+  await win.keyboard.press('ArrowRight');
+  await sub.waitFor({ timeout: 2000 });
+  await win.keyboard.press('ArrowLeft');
+  await sub.waitFor({ state: 'detached', timeout: 2000 });
+  await win.keyboard.press('Escape');
+  await parent.waitFor({ state: 'detached', timeout: 2000 });
+});
+
 await check('flag creates a follow-up task', async () => {
   await win.locator('#message-list .row', { hasText: 'Lena Okafor' }).click({ button: 'right' });
   await win.getByRole('menuitem', { name: /Follow up/ }).click();
