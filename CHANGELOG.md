@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.13 — 2026-11-01
+
+- The initials in the account button at the top right are now properly centred whatever font Windows uses.
+- Dark mode: the initials on Chat space icons, and today's date heading in Calendar's Schedule view, were dark blue on dark blue. They now use a lighter blue that's easy to read.
+
 ## 1.0.12 — 2026-10-29
 
 - Menus behave like Windows menus: hovering over an item with ▸ opens its submenu beside the menu, which stays open. Moving to another item closes it again. With the keyboard, Right opens a submenu and Left or Esc goes back. Long menus no longer need scrolling.

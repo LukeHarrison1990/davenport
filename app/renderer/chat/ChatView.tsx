@@ -93,7 +93,7 @@ export function ChatView() {
         { label: 'Open in Google Chat', icon: 'globe', onClick: () => void call('chat.openInBrowser', s.accountId, s.id) }
       ])}>
       {s.kind === 'space' ? (
-        <span className="av" style={{ width: 28, height: 28, borderRadius: 6, background: 'var(--accent-soft)', color: 'var(--accent)', fontSize: 11 }}>{s.name.split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase()}</span>
+        <span className="av" style={{ width: 28, height: 28, borderRadius: 6, background: 'var(--accent-soft)', color: 'var(--accent-ink)', fontSize: 11 }}>{s.name.split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase()}</span>
       ) : (
         <Avatar name={s.name} size={28} />
       )}
@@ -389,7 +389,7 @@ function SpaceView({ space, onThread }: { space: ChatSpace; onThread: (m: ChatMe
     <main className="chat-main" aria-label={space.name}>
       <div className="chat-head">
         {space.kind === 'space' ? (
-          <span className="av" style={{ width: 36, height: 36, borderRadius: 8, background: 'var(--accent-soft)', color: 'var(--accent)' }}>{space.name.split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase()}</span>
+          <span className="av" style={{ width: 36, height: 36, borderRadius: 8, background: 'var(--accent-soft)', color: 'var(--accent-ink)' }}>{space.name.split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase()}</span>
         ) : <Avatar name={space.name} size={36} />}
         <div style={{ display: 'flex', flexDirection: 'column' }}>
           <h1 style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>{space.name}</h1>

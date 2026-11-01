@@ -468,7 +468,7 @@ function ScheduleView({ days, events, onPeek }: { days: number[]; events: CalEve
         if (!evs.length) return null;
         return (
           <div key={d} className="day">
-            <h3 style={sameDay(d, Date.now()) ? { color: 'var(--accent)' } : undefined}>{longDay(d)}</h3>
+            <h3 style={sameDay(d, Date.now()) ? { color: 'var(--accent-ink)' } : undefined}>{longDay(d)}</h3>
             <div>
               {evs.map((e) => (
                 <button key={e.accountId + e.id} className="item" onClick={(ev) => onPeek(e, ev.clientX, ev.clientY)} onContextMenu={contextMenu(() => eventMenu(e))}>

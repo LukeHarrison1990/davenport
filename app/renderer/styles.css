@@ -4,6 +4,7 @@
   --accent-strong: #16304F;
   --accent-soft: #E3EAF3;
   --accent-tint: #F3F6FA;
+  --accent-ink: var(--accent); /* accent-coloured text that stays readable in dark mode */
   --brass: #9A7740;
   --brass-light: #D9B77A;
   --brass-soft: #FBF5EA;
@@ -49,6 +50,7 @@
 
 :root[data-theme='dark'] {
   --accent-soft: #23344A;
+  --accent-ink: #9DB8DC;
   --accent-tint: #1B2633;
   --brass-soft: #2E2618;
   --brass-border: #5A4724;
@@ -118,7 +120,7 @@ a { color: var(--accent); }
 .titlebar .right { margin-left: auto; display: flex; align-items: center; gap: 12px; -webkit-app-region: no-drag; }
 .titlebar .sync { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #E4E9F0; background: transparent; border: 0; padding: 4px 6px; border-radius: 4px; }
 .titlebar .sync:hover { background: rgba(255,255,255,0.1); }
-.avatar-btn { width: 30px; height: 30px; border-radius: 50%; border: 2px solid var(--brass-light); background: #2F5480; color: #fff; font-weight: 600; font-size: 12px; }
+.avatar-btn { width: 30px; height: 30px; padding: 0; border-radius: 50%; border: 2px solid var(--brass-light); background: #2F5480; color: #fff; font-weight: 600; font-size: 12px; line-height: 1; display: inline-flex; align-items: center; justify-content: center; letter-spacing: 0; flex: 0 0 auto; }
 
 .ribbon { background: var(--surface); border-bottom: 1px solid var(--border); flex: 0 0 auto; }
 .ribbon-tabs { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px 12px 0; }
