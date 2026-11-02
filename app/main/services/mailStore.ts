@@ -46,6 +46,7 @@ interface MsgRow {
   list_unsub: string | null;
   body_fetched: number;
   snooze_until: number | null;
+  last_date?: number;
   flag_due: number | null;
   task_id?: string | null;
   cnt?: number;
@@ -443,15 +444,49 @@ export function list(q: ListQuery): MessageSummary[] {
        r AS (SELECT f.*, ROW_NUMBER() OVER (PARTITION BY account_id, thread_id ORDER BY date DESC) AS rn,
              MAX(unread) OVER (PARTITION BY account_id, thread_id) AS any_unread FROM f)
        SELECT r.*, (SELECT COUNT(*) FROM messages t WHERE t.account_id = r.account_id AND t.thread_id = r.thread_id
-             AND t.labels NOT LIKE '%"TRASH"%' AND t.labels NOT LIKE '%"SPAM"%') AS cnt
-       FROM r WHERE rn = 1 ORDER BY date DESC LIMIT ? OFFSET ?`
+             AND t.labels NOT LIKE '%"TRASH"%' AND t.labels NOT LIKE '%"SPAM"%') AS cnt,
+             -- Like Gmail and Outlook, a conversation sorts by its newest message, your replies included.
+             COALESCE((SELECT MAX(t.date) FROM messages t WHERE t.account_id = r.account_id AND t.thread_id = r.thread_id
+             AND t.labels NOT LIKE '%"TRASH"%' AND t.labels NOT LIKE '%"SPAM"%' AND t.labels NOT LIKE '%"DRAFT"%'), r.date) AS last_date
+       FROM r WHERE rn = 1 ORDER BY last_date DESC LIMIT ? OFFSET ?`
     : `${base} ORDER BY m.date DESC LIMIT ? OFFSET ?`;
   const rows = all<MsgRow>(sql, ...params, limit, offset);
   const catCache = new Map<string, Map<string, { name: string; color: string }>>();
   return rows.map((r) => {
     if (!catCache.has(r.account_id)) catCache.set(r.account_id, categoryMap(r.account_id));
-    return toSummary(r, catCache.get(r.account_id)!);
+    const summary = toSummary(r, catCache.get(r.account_id)!);
+    return threaded && (r.cnt ?? 1) > 1 ? withLatest(summary) : summary;
   });
+}
+
+/**
+ * Conversation view: the row stays tied to the message in this folder (so actions on it work on the right
+ * message), but shows the conversation as a whole, as Gmail and Outlook do: the newest message's time and
+ * preview, even when that's your reply in Sent, and everyone who has written, with you as "me".
+ */
+function withLatest(s: MessageSummary): MessageSummary {
+  const msgs = all<{ from_name: string | null; from_email: string; date: number; snippet: string; labels: string }>(
+    `SELECT from_name, from_email, date, snippet, labels FROM messages WHERE account_id = ? AND thread_id = ?
+     AND labels NOT LIKE '%"TRASH"%' AND labels NOT LIKE '%"SPAM"%' AND labels NOT LIKE '%"DRAFT"%' ORDER BY date`,
+    s.accountId, s.threadId
+  );
+  if (!msgs.length) return s;
+  const latest = msgs[msgs.length - 1];
+  const mine = (m: { labels: string }) => m.labels.includes('"SENT"');
+  const people: { key: string; name: string; me: boolean }[] = [];
+  for (const m of msgs) {
+    const me = mine(m);
+    const key = me ? 'me' : m.from_email.toLowerCase();
+    const at = people.findIndex((p) => p.key === key);
+    if (at >= 0) people.splice(at, 1); // keep each person once, in order of their latest message
+    people.push({ key, name: m.from_name || m.from_email, me });
+  }
+  const label = (p: { name: string; me: boolean }, short: boolean) => (p.me ? 'me' : short ? p.name.split(/[\s@]/)[0] : p.name);
+  const short = people.length > 1;
+  // Gmail-style: up to three names; with more, the first, then the latest two.
+  const parts = people.length > 3 ? [label(people[0], short), '…', ...people.slice(-2).map((p) => label(p, short))] : people.map((p) => label(p, short));
+  const senders = parts.join(', ').replace(/^me\b/, 'Me');
+  return { ...s, date: latest.date, snippet: latest.snippet, threadSenders: people.length === 1 && !people[0].me ? undefined : senders };
 }
 
 function applyFocused(tab: 'focused' | 'other', mode: 'categories' | 'important', where: string[], params: (string | number)[]) {

@@ -239,7 +239,7 @@ export function MessageList({ folders, position, size }: { folders: Folder[]; po
             <div className="group-label">{g.label}</div>
             {g.items.map(({ m, index }) => {
               const isSel = selIds.has(m.accountId + m.id);
-              const who = showRecipient ? 'To: ' + (m.to.map(addrName).join(', ') || '(no recipients)') : addrName(m.from);
+              const who = showRecipient ? 'To: ' + (m.to.map(addrName).join(', ') || '(no recipients)') : m.threadSenders ?? addrName(m.from);
               return (
                 <div
                   key={m.accountId + m.id}

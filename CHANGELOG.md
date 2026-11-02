@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.16 — 2026-11-02
+
+- Conversation view now works like Gmail and Outlook: each conversation in the message list shows the time and preview of its newest message, including your own replies, and moves up the list when anyone replies. The sender column lists who's in the conversation ("Nicola, me"). The row still stands for the message in that folder, so moving, deleting and archiving work as before.
+
 ## 1.0.15 — 2026-11-02
 
 - The installer starts with a normal Welcome page, with a Davenport sidebar picture on the Welcome and Finish pages. The licence comes second, with one line above it: "Davenport is free software, licensed under the MIT License below."

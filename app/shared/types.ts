@@ -60,6 +60,8 @@ export interface MessageSummary {
   snoozedUntil?: number;
   flagDue?: number;
   threadCount?: number;
+  /** Conversation view: who's in the conversation, as Gmail shows it ("Nicola, me"). */
+  threadSenders?: string;
 }
 
 export interface Attachment {

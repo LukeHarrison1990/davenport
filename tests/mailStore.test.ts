@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import { openDatabase } from '../app/main/db';
+import { openDatabase, run } from '../app/main/db';
 import { seedDemo } from '../app/main/demo';
 import * as store from '../app/main/services/mailStore';
 import { setSettings } from '../app/main/settings';
@@ -42,6 +42,26 @@ describe('listing', () => {
     const inbox = store.list({ accountId: acc, folder: { type: 'label', id: 'INBOX' }, tab: 'all' });
     const web = inbox.find((m) => m.subject === 'Re: Website relaunch timeline');
     expect(web?.threadCount).toBe(2);
+  });
+
+  it('shows the newest message in a conversation, including your own reply, and moves it up the list', () => {
+    setSettings({ conversationView: true, focusedInbox: 'off' });
+    const before = store.list({ accountId: acc, folder: { type: 'label', id: 'INBOX' } });
+    const target = before[before.length - 1]; // the oldest conversation in the inbox
+    const replyAt = Date.now() + 60_000;
+    run(
+      `INSERT INTO messages (account_id, id, thread_id, from_name, from_email, to_json, cc_json, subject, snippet, date, labels)
+       VALUES (?, 'my-reply', ?, 'Alex Morgan', 'alex@northfield.example', '[]', '[]', ?, 'Thanks, that works for me.', ?, '["SENT"]')`,
+      acc, target.threadId, 'Re: ' + target.subject, replyAt
+    );
+    const after = store.list({ accountId: acc, folder: { type: 'label', id: 'INBOX' } });
+    const row = after[0];
+    expect(row.threadId).toBe(target.threadId); // moved to the top
+    expect(row.id).toBe(target.id); // still the inbox message, so actions act on it
+    expect(row.snippet).toBe('Thanks, that works for me.');
+    expect(row.date).toBe(replyAt);
+    expect(row.threadSenders).toBe(`${target.from.name!.split(' ')[0]}, me`);
+    run("DELETE FROM messages WHERE id = 'my-reply'");
   });
 
   it('searches with Gmail operators and free text', () => {
