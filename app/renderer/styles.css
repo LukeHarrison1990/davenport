@@ -367,7 +367,10 @@ body.resizing-y, body.resizing-y * { cursor: row-resize !important; }
 }
 textarea.input { min-height: 90px; resize: vertical; font-family: var(--font); }
 .check { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
-.check input { width: 16px; height: 16px; accent-color: var(--accent); }
+.check input { width: 16px; height: 16px; flex: 0 0 auto; accent-color: var(--accent); }
+/* Calendar list: a fixed, compact box that never shrinks when a long name runs out of room. */
+.cal-check input { flex: 0 0 13px; width: 13px; height: 13px; margin: 0; }
+.cal-check span { min-width: 0; }
 .row-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .row-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .hint-text { color: var(--muted); font-size: 12px; line-height: 1.45; }

@@ -167,7 +167,7 @@ function CalendarList({ cals }: { cals: CalendarInfo[] }) {
             <div key={label} style={{ marginBottom: 10 }}>
               <div className="pane-heading" style={{ padding: '2px 0 4px' }}>{label}</div>
               {list.map((c) => (
-                <label key={c.id} className="check" style={{ margin: '4px 0' }} onContextMenu={contextMenu(() => [
+                <label key={c.id} className="check cal-check" style={{ margin: '4px 0' }} onContextMenu={contextMenu(() => [
                   { label: c.selected ? 'Hide calendar' : 'Show calendar', icon: c.selected ? 'close' : 'check', onClick: () => void call('calendar.setSelected', c.accountId, c.id, !c.selected) },
                   { label: 'Show only this calendar', icon: 'calendar', onClick: () => { for (const o of cals) void call('calendar.setSelected', o.accountId, o.id, o.id === c.id && o.accountId === c.accountId); } },
                   { label: 'Show all calendars', icon: 'grid', onClick: () => { for (const o of cals) if (!o.selected) void call('calendar.setSelected', o.accountId, o.id, true); } },

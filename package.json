@@ -1,6 +1,6 @@
 {
   "name": "davenport",
-  "version": "1.0.13",
+  "version": "1.0.14",
   "description": "An Outlook-style desktop client for Google Workspace: Gmail, Calendar, Contacts, Chat and Tasks in one window.",
   "main": "dist/main/index.js",
   "scripts": {
@@ -84,7 +84,9 @@
       "allowToChangeInstallationDirectory": true,
       "artifactName": "${productName}-Setup-${version}.${ext}",
       "shortcutName": "Davenport",
-      "createDesktopShortcut": true
+      "createDesktopShortcut": true,
+      "license": "build/license.txt",
+      "include": "build/installer.nsh"
     },
     "portable": {
       "artifactName": "${productName}-${version}-${arch}-portable.${ext}"

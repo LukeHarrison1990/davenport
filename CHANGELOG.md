@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.14 — 2026-11-02
+
+- Calendar: the tick boxes next to each calendar stay the same small size however wide the side pane is. Before, long calendar names squashed them. Tick boxes elsewhere no longer shrink either.
+- The installer now shows the MIT License before installing, with a Next button. The MIT License doesn't ask anything of people who just use the app, so there's nothing to agree to. The page is skipped when updating.
+
 ## 1.0.13 — 2026-11-01
 
 - The initials in the account button at the top right are now properly centred whatever font Windows uses.
