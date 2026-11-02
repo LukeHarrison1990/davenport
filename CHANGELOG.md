@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.15 — 2026-11-02
+
+- The installer starts with a normal Welcome page, with a Davenport sidebar picture on the Welcome and Finish pages. The licence comes second, with one line above it: "Davenport is free software, licensed under the MIT License below."
+- Fixed: choosing to install for everyone on the computer showed the licence a second time after the administrator prompt. The Welcome and Licence pages are now skipped after that prompt, and when updating.
+
 ## 1.0.14 — 2026-11-02
 
 - Calendar: the tick boxes next to each calendar stay the same small size however wide the side pane is. Before, long calendar names squashed them. Tick boxes elsewhere no longer shrink either.
