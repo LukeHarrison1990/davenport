@@ -82,6 +82,8 @@ export interface MessageDetail extends MessageSummary {
   references?: string;
   listUnsubscribe?: string;
   hasRemoteImages: boolean;
+  /** Pictures from the internet may be shown without asking (Settings, or the sender is on the "always show" list). */
+  remoteImagesAllowed?: boolean;
 }
 
 export type FolderRef =

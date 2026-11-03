@@ -180,6 +180,7 @@ export function MessageList({ folders, position, size }: { folders: Folder[]; po
                 <span className="line">
                   {o.error && <span className="preview" style={{ color: 'var(--danger)' }}>{o.error}</span>}
                   <span style={{ flex: 1 }} />
+                  {o.status !== 'sending' && <button className="btn small primary" onClick={() => void call('mail.sendNow', o.id).catch(fail)}>{o.status === 'failed' ? 'Send again' : 'Send now'}</button>}
                   <button className="btn small" onClick={async () => {
                     const d = await call('mail.cancelSend', o.id);
                     if (d) void call('app.openWindow', 'compose', { draft: JSON.stringify({ ...d, sendAt: undefined }) });

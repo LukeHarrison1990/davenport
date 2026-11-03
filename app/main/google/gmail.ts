@@ -3,6 +3,7 @@ import type { Addr, Attachment, Rule, SendAs, Vacation } from '../../shared/type
 import { GoogleClient, pool } from './http';
 import { decodeHeader, fromBase64Url, parseAddressList, toBase64Url } from './mime';
 
+const enc = encodeURIComponent;
 const BASE = 'https://gmail.googleapis.com/gmail/v1/users/me';
 
 export interface GLabel {
@@ -195,7 +196,7 @@ export class Gmail {
   async metadata(ids: string[]): Promise<ParsedMessage[]> {
     const res = await pool(ids, 8, async (id) => {
       try {
-        const m = await this.c.get<GMessage>(BASE + '/messages/' + id, { format: 'metadata', metadataHeaders: META_HEADERS });
+        const m = await this.c.get<GMessage>(BASE + '/messages/' + enc(id), { format: 'metadata', metadataHeaders: META_HEADERS });
         return parseMessage(m);
       } catch (e) {
         if ((e as { status?: number }).status === 404) return null;
@@ -206,17 +207,17 @@ export class Gmail {
   }
 
   async full(id: string): Promise<ParsedMessage> {
-    const m = await this.c.get<GMessage>(BASE + '/messages/' + id, { format: 'full' });
+    const m = await this.c.get<GMessage>(BASE + '/messages/' + enc(id), { format: 'full' });
     return parseMessage(m);
   }
 
   async raw(id: string): Promise<Buffer> {
-    const m = await this.c.get<{ raw: string }>(BASE + '/messages/' + id, { format: 'raw' });
+    const m = await this.c.get<{ raw: string }>(BASE + '/messages/' + enc(id), { format: 'raw' });
     return fromBase64Url(m.raw);
   }
 
   async attachment(messageId: string, attachmentId: string): Promise<Buffer> {
-    const r = await this.c.get<{ data: string }>(BASE + `/messages/${messageId}/attachments/${attachmentId}`);
+    const r = await this.c.get<{ data: string }>(BASE + `/messages/${enc(messageId)}/attachments/${enc(attachmentId)}`);
     return fromBase64Url(r.data);
   }
 
@@ -242,7 +243,8 @@ export class Gmail {
       pageToken = r.nextPageToken;
       if (!pageToken) break;
     }
-    return { changes, historyId };
+    // More changes than we read in one go: the caller refreshes everything instead of skipping the rest.
+    return { changes, historyId, truncated: !!pageToken };
   }
 
   batchModify(ids: string[], add: string[], remove: string[]) {
@@ -250,10 +252,10 @@ export class Gmail {
   }
 
   async trash(ids: string[]) {
-    await pool(ids, 6, (id) => this.c.post(BASE + `/messages/${id}/trash`));
+    await pool(ids, 6, (id) => this.c.post(BASE + `/messages/${enc(id)}/trash`));
   }
   async untrash(ids: string[]) {
-    await pool(ids, 6, (id) => this.c.post(BASE + `/messages/${id}/untrash`));
+    await pool(ids, 6, (id) => this.c.post(BASE + `/messages/${enc(id)}/untrash`));
   }
   batchDelete(ids: string[]) {
     return this.c.post(BASE + '/messages/batchDelete', { ids });
@@ -265,11 +267,16 @@ export class Gmail {
 
   async saveDraft(rawMime: string, threadId: string | undefined, draftId?: string) {
     const body = { message: { raw: toBase64Url(rawMime), threadId } };
-    if (draftId) return this.c.put<{ id: string; message: GMessage }>(BASE + '/drafts/' + draftId, body);
+    if (draftId) return this.c.put<{ id: string; message: GMessage }>(BASE + '/drafts/' + enc(draftId), body);
     return this.c.post<{ id: string; message: GMessage }>(BASE + '/drafts', body);
   }
+  /** The id of the message a draft currently holds (it changes every time the draft is saved). */
+  async draftMessageId(draftId: string): Promise<string | undefined> {
+    const d = await this.c.get<{ message?: { id: string } }>(BASE + '/drafts/' + enc(draftId), { format: 'minimal' });
+    return d.message?.id;
+  }
   deleteDraft(draftId: string) {
-    return this.c.del(BASE + '/drafts/' + draftId);
+    return this.c.del(BASE + '/drafts/' + enc(draftId));
   }
   async draftIdForMessage(messageId: string): Promise<string | undefined> {
     const all = await this.c.all<{ id: string; message: { id: string } }>(BASE + '/drafts', 'drafts', { maxResults: 500 }, 5);

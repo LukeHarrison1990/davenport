@@ -12,18 +12,41 @@ export interface RichEditorHandle {
 
 const exec = (cmd: string, value?: string) => document.execCommand(cmd, false, value);
 
-export const RichEditor = forwardRef<RichEditorHandle, { initialHtml: string; onChange: (html: string) => void; minHeight?: number; label?: string }>(
-  function RichEditor({ initialHtml, onChange, minHeight = 220, label = 'Message body' }, ref) {
+// The editor sits inside Davenport's own window, so a quoted email must not bring tags that would restyle
+// or take over the window (a newsletter's <style> would otherwise restyle the whole app while you reply).
+const PURIFY = {
+  FORBID_TAGS: ['style', 'link', 'meta', 'base', 'title', 'script', 'iframe', 'frame', 'object', 'embed', 'form', 'input', 'button', 'textarea', 'select', 'option', 'svg', 'math'],
+  FORBID_ATTR: ['srcset'],
+  ADD_ATTR: ['target']
+};
+const clean = (html: string) => DOMPurify.sanitize(html, PURIFY);
+
+const QUOTE_MARK = '<div class="dav-quote">';
+/**
+ * Pictures from the internet in a quoted email would load as soon as the reply opens, telling the sender
+ * you've read it. While pictures are blocked they're parked in data-dav-src and put back when saving or sending.
+ */
+function holdRemoteImages(html: string): string {
+  const at = html.indexOf(QUOTE_MARK);
+  if (at < 0) return html;
+  const quote = html.slice(at).replace(/(<img\b[^>]*?)\ssrc\s*=\s*(["'])(https?:[^"']*)\2/gi, '$1 data-dav-src=$2$3$2 src=""');
+  return html.slice(0, at) + quote;
+}
+const releaseRemoteImages = (html: string) => html.replace(/ data-dav-src="([^"]*)" src=""/g, ' src="$1"');
+
+export const RichEditor = forwardRef<RichEditorHandle, { initialHtml: string; onChange: (html: string) => void; minHeight?: number; label?: string; holdImages?: boolean }>(
+  function RichEditor({ initialHtml, onChange, minHeight = 220, label = 'Message body', holdImages = false }, ref) {
     const el = useRef<HTMLDivElement>(null);
     const fileRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
-      if (el.current) el.current.innerHTML = DOMPurify.sanitize(initialHtml, { ADD_ATTR: ['target'] });
+      if (el.current) el.current.innerHTML = clean(holdImages ? holdRemoteImages(initialHtml) : initialHtml);
       // Only set once; the editor owns its content afterwards.
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    const emit = () => onChange(el.current?.innerHTML ?? '');
+    const html = () => releaseRemoteImages(el.current?.innerHTML ?? '');
+    const emit = () => onChange(html());
 
     useImperativeHandle(ref, () => ({
       focus: () => {
@@ -36,12 +59,12 @@ export const RichEditor = forwardRef<RichEditorHandle, { initialHtml: string; on
       },
       insertHtml: (html: string) => {
         el.current?.focus();
-        exec('insertHTML', DOMPurify.sanitize(html));
+        exec('insertHTML', clean(html));
         emit();
       },
-      getHtml: () => el.current?.innerHTML ?? '',
-      setHtml: (html: string) => {
-        if (el.current) el.current.innerHTML = DOMPurify.sanitize(html);
+      getHtml: () => html(),
+      setHtml: (next: string) => {
+        if (el.current) el.current.innerHTML = clean(holdImages ? holdRemoteImages(next) : next);
         emit();
       }
     }));

@@ -44,12 +44,30 @@ export function encodeHeader(value: string): string {
   return words.map((w) => `=?UTF-8?B?${Buffer.from(w, 'utf8').toString('base64')}?=`).join(CRLF + ' ');
 }
 
+/** Header values can't contain line breaks: a stray CR/LF would start a new header (header injection). */
+const oneLine = (s: string) => s.replace(/[\r\n\t]+/g, ' ').trim();
+
+/** An email address that's safe to put in a header, or an error explaining what's wrong with it. */
+export function cleanEmail(email: string): string {
+  const e = oneLine(email);
+  if (!/^[^\s<>()\[\],;:"\\@]+@[^\s<>()\[\],;:"\\@]+$/.test(e)) throw new Error(`"${e}" isn't a valid email address.`);
+  return e;
+}
+
+/** Message-IDs as used in In-Reply-To and References: only the <...> tokens, nothing else. */
+const cleanIds = (s: string) => (oneLine(s).match(/<[^<>\s]+>/g) ?? []).join(' ');
+
+/** A MIME type like "image/png", or a safe default if the value from another email looks odd. */
+const cleanType = (t: string) => (/^[\w.+-]+\/[\w.+-]+$/.test(t.trim()) ? t.trim() : 'application/octet-stream');
+
 export function formatAddr(a: Addr): string {
-  if (!a.name || a.name === a.email) return a.email;
-  const name = isAscii(a.name)
-    ? /[(),.:;<>@[\]"\\]/.test(a.name) ? `"${a.name.replace(/(["\\])/g, '\\$1')}"` : a.name
-    : encodeHeader(a.name);
-  return `${name} <${a.email}>`;
+  const email = cleanEmail(a.email);
+  const name = a.name ? oneLine(a.name) : '';
+  if (!name || name === email) return email;
+  const shown = isAscii(name)
+    ? /[(),.:;<>@[\]"\\]/.test(name) ? `"${name.replace(/(["\\])/g, '\\$1')}"` : name
+    : encodeHeader(name);
+  return `${shown} <${email}>`;
 }
 
 const formatList = (list: Addr[]) => list.map(formatAddr).join(', ');
@@ -91,8 +109,10 @@ export function buildMime(m: MimeInput): string {
   if (m.cc?.length) headers.push('Cc: ' + formatList(m.cc));
   if (m.bcc?.length) headers.push('Bcc: ' + formatList(m.bcc));
   headers.push('Subject: ' + encodeHeader(m.subject));
-  if (m.inReplyTo) headers.push('In-Reply-To: ' + m.inReplyTo);
-  if (m.references || m.inReplyTo) headers.push('References: ' + [m.references, m.inReplyTo].filter(Boolean).join(' ').trim());
+  const inReplyTo = m.inReplyTo ? cleanIds(m.inReplyTo) : '';
+  const references = cleanIds([m.references, inReplyTo].filter(Boolean).join(' '));
+  if (inReplyTo) headers.push('In-Reply-To: ' + inReplyTo);
+  if (references) headers.push('References: ' + references);
   if (m.importance === 'high') {
     headers.push('Importance: High');
     headers.push('X-Priority: 1');
@@ -127,9 +147,11 @@ export function buildMime(m: MimeInput): string {
   const parts = [`Content-Type: multipart/mixed; boundary="${mixB}"`, '', `--${mixB}`, alternative];
   for (const a of atts) {
     parts.push(`--${mixB}`);
-    parts.push(`Content-Type: ${a.mimeType || 'application/octet-stream'}; name="${isAscii(a.filename) ? a.filename : encodeHeader(a.filename)}"`);
-    parts.push(`Content-Disposition: ${a.contentId ? 'inline' : 'attachment'}; ${filenameParam(a.filename)}`);
-    if (a.contentId) parts.push(`Content-ID: <${a.contentId}>`);
+    const filename = oneLine(a.filename) || 'attachment';
+    const contentId = a.contentId ? a.contentId.replace(/[^\w.@$+-]/g, '') : '';
+    parts.push(`Content-Type: ${cleanType(a.mimeType || '')}; name="${isAscii(filename) && !/["\\]/.test(filename) ? filename : encodeHeader(filename)}"`);
+    parts.push(`Content-Disposition: ${contentId ? 'inline' : 'attachment'}; ${filenameParam(filename)}`);
+    if (contentId) parts.push(`Content-ID: <${contentId}>`);
     parts.push('Content-Transfer-Encoding: base64');
     parts.push('');
     parts.push(wrap76(a.data.toString('base64')));

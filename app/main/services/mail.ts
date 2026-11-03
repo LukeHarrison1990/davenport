@@ -1,5 +1,5 @@
 // Mail: syncing with Gmail and every action the interface can take on messages.
-import { app, BrowserWindow, dialog, shell } from 'electron';
+import { app, BrowserWindow, dialog, session, shell } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
@@ -8,14 +8,15 @@ import { all, get, kvAll, kvDelete, kvGet, kvSet, run, tx, uid } from '../db';
 import { changed, emit, toast } from '../events';
 import { Gmail, ruleToQuery, type GFilter, type ParsedMessage } from '../google/gmail';
 import { GoogleApiError, QuotaExceeded, ReauthRequired } from '../google/http';
-import { buildMime, htmlToText, type MimeAttachment } from '../google/mime';
+import { buildMime, cleanEmail, htmlToText, type MimeAttachment } from '../google/mime';
 import { getSettings } from '../settings';
 import { client, getAccount, isDemo, listAccounts, setStatus } from './accounts';
-import { enqueue, registerOp } from './ops';
+import { enqueue, registerOp, setPermanentFailureHook } from './ops';
 import * as store from './mailStore';
 import { notifyNewMail } from './notify';
 import { createTaskForMessage, completeTaskForMessage } from './tasks';
 import { uploadToDrive } from '../google/drive';
+import { isBlockedType, markFromInternet } from './attachmentSafety';
 
 const gmail = (accountId: string) => new Gmail(client(accountId));
 
@@ -116,8 +117,13 @@ export async function syncMail(accountId: string): Promise<void> {
   }
 }
 
-async function initialSync(accountId: string): Promise<void> {
-  setStatus(accountId, 'syncing', 'Downloading mail');
+/**
+ * Downloads the mailbox. With refresh = true (after being offline so long that Gmail's change history has
+ * expired, or after more changes than can be read at once) it also updates every cached message and removes
+ * the ones that were deleted, instead of only adding what's new.
+ */
+async function initialSync(accountId: string, refresh = false): Promise<void> {
+  setStatus(accountId, 'syncing', refresh ? 'Catching up with changes' : 'Downloading mail');
   const g = gmail(accountId);
   const profile = await g.profile();
   await syncLabels(accountId);
@@ -125,8 +131,10 @@ async function initialSync(accountId: string): Promise<void> {
 
   // Inbox first so the window is useful within seconds, then everything else in the sync window.
   // Anything already downloaded by an earlier, interrupted attempt is skipped, so a restart resumes.
-  const have = new Set(all<{ id: string }>('SELECT id FROM messages WHERE account_id = ?', accountId).map((r) => r.id));
-  const inbox = (await g.listIds(undefined, ['INBOX'], 300)).map((m) => m.id).filter((id) => !have.has(id));
+  const cached = all<{ id: string; date: number }>('SELECT id, date FROM messages WHERE account_id = ?', accountId);
+  const have = new Set(refresh ? [] : cached.map((r) => r.id));
+  const inboxIds = await g.listIds(undefined, ['INBOX'], 300);
+  const inbox = inboxIds.map((m) => m.id).filter((id) => !have.has(id));
   for (let i = 0; i < inbox.length; i += 50) {
     await fetchAndStore(accountId, inbox.slice(i, i + 50));
     inbox.slice(i, i + 50).forEach((id) => have.add(id));
@@ -138,10 +146,21 @@ async function initialSync(accountId: string): Promise<void> {
   const todo = [...new Set([...rest, ...drafts].map((m) => m.id))].filter((id) => !have.has(id));
   for (let i = 0; i < todo.length; i += 100) {
     await fetchAndStore(accountId, todo.slice(i, i + 100));
-    setStatus(accountId, 'syncing', `Downloading mail (${Math.min(i + 100, todo.length).toLocaleString()} of ${todo.length.toLocaleString()})`);
+    setStatus(accountId, 'syncing', `${refresh ? 'Catching up' : 'Downloading mail'} (${Math.min(i + 100, todo.length).toLocaleString()} of ${todo.length.toLocaleString()})`);
     changed('mail', accountId);
   }
+  if (refresh) {
+    // Cached messages from inside the sync window that Gmail no longer lists were deleted while we were away.
+    const onServer = new Set([...inboxIds, ...rest, ...drafts].map((m) => m.id));
+    const windowStart = Date.now() - days * 864e5;
+    const queued = new Set(
+      all<{ payload: string }>('SELECT payload FROM pending_ops WHERE account_id = ?', accountId).flatMap((r) => (JSON.parse(r.payload).ids as string[] | undefined) ?? [])
+    );
+    const gone = cached.filter((m) => m.date >= windowStart && !onServer.has(m.id) && !queued.has(m.id)).map((m) => m.id);
+    if (gone.length) store.deleteLocal(accountId, gone);
+  }
   run('UPDATE accounts SET history_id = ?, initial_done = 1 WHERE id = ?', profile.historyId, accountId);
+  changed('mail', accountId);
   changed('folders', accountId);
 }
 
@@ -159,12 +178,12 @@ async function incrementalSync(accountId: string, historyId: string): Promise<vo
     res = await g.history(historyId);
   } catch (e) {
     if (e instanceof GoogleApiError && e.status === 404) {
-      // History has expired (about a week offline): start again from scratch.
-      run('UPDATE accounts SET initial_done = 0 WHERE id = ?', accountId);
-      return initialSync(accountId);
+      // History has expired (about a week offline): refresh everything, including what changed while away.
+      return initialSync(accountId, true);
     }
     throw e;
   }
+  if (res.truncated) return initialSync(accountId, true);
   if (!res.changes.length) {
     run('UPDATE accounts SET history_id = ? WHERE id = ?', res.historyId, accountId);
     return;
@@ -218,6 +237,23 @@ async function incrementalSync(accountId: string, historyId: string): Promise<vo
   changed('folders', accountId);
 }
 
+// When Google refuses a queued change for good, re-read those messages so the local copy matches Gmail again.
+setPermanentFailureHook(async (accountId, _kind, payload: { ids?: string[] }) => {
+  const ids = (payload?.ids ?? []).filter((id) => store.getRow(accountId, id));
+  if (!ids.length || isDemo(accountId)) return;
+  let found: ParsedMessage[];
+  try {
+    found = await fetchAndStore(accountId, ids);
+  } catch {
+    return; // offline or similar: the next sync will catch up
+  }
+  // Gmail only leaves out messages that no longer exist.
+  const gone = ids.filter((id) => !found.some((m) => m.id === id));
+  if (gone.length) store.deleteLocal(accountId, gone);
+  changed('mail', accountId);
+  changed('folders', accountId);
+});
+
 // ---------- Reading ----------
 
 export async function getMessage(accountId: string, id: string): Promise<MessageDetail> {
@@ -228,7 +264,7 @@ export async function getMessage(accountId: string, id: string): Promise<Message
   }
   const d = store.getDetail(accountId, id);
   if (!d) throw new Error('Message not found');
-  return d;
+  return { ...d, remoteImagesAllowed: remoteImagesAllowed(d.from.email) };
 }
 
 async function resolveInlineImages(accountId: string, id: string, p: ParsedMessage): Promise<string | undefined> {
@@ -412,7 +448,12 @@ export async function deleteFolder(accountId: string, labelId: string): Promise<
   if (!row) return;
   const affected = store.labelRows(accountId).filter((l) => l.path === row.path || l.path.startsWith(row.path + '/'));
   for (const l of affected) {
-    if (!isDemo(accountId)) await gmail(accountId).deleteLabel(l.id).catch(() => undefined);
+    if (!isDemo(accountId)) {
+      // Already gone from Gmail is fine; any other failure stops here so the folder doesn't vanish and come back.
+      await gmail(accountId).deleteLabel(l.id).catch((e) => {
+        if (!(e instanceof GoogleApiError && e.status === 404)) throw e;
+      });
+    }
     run('DELETE FROM labels WHERE account_id = ? AND id = ?', accountId, l.id);
     run('DELETE FROM message_labels WHERE account_id = ? AND label_id = ?', accountId, l.id);
     for (const m of all<{ id: string; labels: string }>('SELECT id, labels FROM messages WHERE account_id = ? AND labels LIKE ?', accountId, `%"${l.id}"%`)) {
@@ -586,6 +627,8 @@ function demoAttachment(filename: string): Buffer {
 
 export function send(d: Draft): { outboxId: string; sendAt: number } {
   if (!d.to.length && !d.cc.length && !d.bcc.length) throw new Error('Add at least one recipient.');
+  // Catch typos now, while the message is still open, rather than when it fails in the outbox.
+  for (const a of [...d.to, ...d.cc, ...d.bcc]) cleanEmail(a.email);
   const sendAt = d.sendAt && d.sendAt > Date.now() ? d.sendAt : Date.now() + getSettings().undoSendSeconds * 1000;
   const id = uid();
   run("INSERT INTO outbox (id, account_id, draft_json, send_at, status, created) VALUES (?, ?, ?, ?, 'waiting', ?)", id, d.accountId, JSON.stringify(d), sendAt, Date.now());
@@ -623,6 +666,25 @@ export function outbox(): OutboxItem[] {
   });
 }
 
+/**
+ * Messages left "sending" when Davenport closed or crashed mid-send. Whether Gmail got them is unknown,
+ * so they're marked failed with a note to check Sent first, rather than risk sending them twice.
+ */
+export function recoverOutbox(): void {
+  const stuck = all<{ id: string }>("SELECT id FROM outbox WHERE status = 'sending'");
+  for (const r of stuck) {
+    run("UPDATE outbox SET status = 'failed', error = ? WHERE id = ?", 'Davenport closed while this was sending. Check Sent: if it isn’t there, choose Send again.', r.id);
+  }
+}
+
+/** Sends a failed or scheduled message now. */
+export function sendNow(outboxId: string): void {
+  run("UPDATE outbox SET status = 'waiting', error = NULL, send_at = ? WHERE id = ? AND status != 'sending'", Date.now(), outboxId);
+  const acc = get<{ account_id: string }>('SELECT account_id FROM outbox WHERE id = ?', outboxId)?.account_id;
+  if (acc) changed('outbox', acc);
+  kickOutbox();
+}
+
 let outboxTimer: NodeJS.Timeout | null = null;
 let outboxBusy = false;
 export function kickOutbox(): void {
@@ -644,13 +706,16 @@ async function processOutbox(): Promise<void> {
       try {
         if (isDemo(d.accountId)) {
           demoSend(d);
+          run('DELETE FROM outbox WHERE id = ?', row.id);
         } else {
           const { mime, threadId } = await draftToMime(d);
           const sent = await gmail(d.accountId).send(mime, threadId);
+          // Gmail has it: take it out of the outbox before anything else, so a hiccup in the tidy-up below
+          // can never make a sent message look failed (and get sent twice).
+          run('DELETE FROM outbox WHERE id = ?', row.id);
           if (d.gmailDraftId) await gmail(d.accountId).deleteDraft(d.gmailDraftId).catch(() => undefined);
-          await fetchAndStore(d.accountId, [sent.id]);
+          await fetchAndStore(d.accountId, [sent.id]).catch(() => undefined);
         }
-        run('DELETE FROM outbox WHERE id = ?', row.id);
         toast({ kind: 'success', text: `Sent: ${d.subject || '(no subject)'}` });
       } catch (e) {
         const offline = e instanceof TypeError || e instanceof QuotaExceeded;
@@ -720,9 +785,11 @@ export async function discardDraft(d: Draft): Promise<void> {
   if (isDemo(d.accountId)) {
     store.deleteLocal(d.accountId, [d.gmailDraftId]);
   } else {
-    await gmail(d.accountId).deleteDraft(d.gmailDraftId).catch(() => undefined);
-    const ids = all<{ id: string }>("SELECT id FROM messages WHERE account_id = ? AND labels LIKE '%\"DRAFT\"%' AND subject = ?", d.accountId, d.subject).map((r) => r.id);
-    store.deleteLocal(d.accountId, ids);
+    // Remove exactly this draft's cached copy (not every draft that happens to share its subject).
+    const g = gmail(d.accountId);
+    const messageId = await g.draftMessageId(d.gmailDraftId).catch(() => undefined);
+    await g.deleteDraft(d.gmailDraftId).catch(() => undefined);
+    if (messageId) store.deleteLocal(d.accountId, [messageId]);
   }
   changed('mail', d.accountId);
   changed('folders', d.accountId);
@@ -735,14 +802,23 @@ async function attachmentData(accountId: string, messageId: string, attachmentId
   return gmail(accountId).attachment(messageId, attachmentId);
 }
 
-const safeName = (n: string) => n.replace(/[<>:"/\\|?*\x00-\x1F]/g, '_').slice(0, 180) || 'attachment';
+// Windows-safe file name: no path separators or reserved characters, no trailing dots or spaces, no reserved device names.
+const safeName = (n: string) => {
+  let s = n.replace(/[<>:"/\\|?*\x00-\x1F]/g, '_').replace(/[.\s]+$/, '').slice(0, 180);
+  if (/^(con|prn|aux|nul|com\d|lpt\d)(\.|$)/i.test(s)) s = '_' + s;
+  return s || 'attachment';
+};
 
 export async function openAttachment(accountId: string, messageId: string, attachmentId: string, filename: string): Promise<void> {
+  if (isBlockedType(filename)) {
+    throw new Error(`To keep your computer safe, Davenport doesn't open programs, scripts or shortcuts straight from email (${path.extname(filename) || filename}). If you trust the sender, use Save as… and check the file before opening it.`);
+  }
   const data = await attachmentData(accountId, messageId, attachmentId, filename);
   const dir = path.join(os.tmpdir(), 'Davenport', uid());
   fs.mkdirSync(dir, { recursive: true });
   const file = path.join(dir, safeName(filename));
   fs.writeFileSync(file, data);
+  markFromInternet(file);
   const err = await shell.openPath(file);
   if (err) throw new Error(err);
 }
@@ -753,7 +829,22 @@ export async function saveAttachment(accountId: string, messageId: string, attac
   const r = win ? await dialog.showSaveDialog(win, opts) : await dialog.showSaveDialog(opts);
   if (r.canceled || !r.filePath) return null;
   fs.writeFileSync(r.filePath, await attachmentData(accountId, messageId, attachmentId, filename));
+  markFromInternet(r.filePath);
   return r.filePath;
+}
+
+/** Removes anything that could navigate, run or embed other content when an email is printed. */
+function stripActiveContent(html: string): string {
+  return html
+    .replace(/<(script|iframe|object|embed|form|noscript|template)\b[\s\S]*?<\/\1\s*>/gi, '')
+    .replace(/<(meta|base|link|iframe|object|embed|frame|frameset|applet)\b[^>]*>/gi, '')
+    .replace(/\son\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+    .replace(/(href|src|action|formaction)\s*=\s*(["']?)\s*javascript:[^"'\s>]*\2/gi, '$1="#"');
+}
+
+/** Pictures from the internet are shown when they aren't blocked in Settings, or the sender is on the "always show" list. */
+export function remoteImagesAllowed(fromEmail: string): boolean {
+  return !getSettings().blockRemoteImages || trustedSenders().includes(fromEmail.toLowerCase());
 }
 
 function printableHtml(m: MessageDetail): string {
@@ -764,11 +855,35 @@ function printableHtml(m: MessageDetail): string {
   <body><h1>${esc(m.subject)}</h1><table><tr><td>From</td><td>${fmtAddr(m.from)}</td></tr><tr><td>Sent</td><td>${esc(new Date(m.date).toLocaleString('en-GB', { dateStyle: 'full', timeStyle: 'short' }))}</td></tr>
   <tr><td>To</td><td>${list(m.to)}</td></tr>${m.cc.length ? `<tr><td>Cc</td><td>${list(m.cc)}</td></tr>` : ''}
   ${m.attachments.filter((a) => !a.contentId).length ? `<tr><td>Attached</td><td>${m.attachments.filter((a) => !a.contentId).map((a) => esc(a.filename)).join('; ')}</td></tr>` : ''}</table>
-  ${m.html ?? `<pre style="white-space:pre-wrap;font-family:inherit">${esc(m.text ?? '')}</pre>`}</body></html>`;
+  ${m.html ? stripActiveContent(m.html) : `<pre style="white-space:pre-wrap;font-family:inherit">${esc(m.text ?? '')}</pre>`}</body></html>`;
 }
 
+/**
+ * Print and PDF render the email in a hidden window with no scripts, in a session of its own that can't
+ * navigate anywhere and only loads pictures from the internet when they're allowed for this sender
+ * (so printing never tells a sender you've opened their email when you've blocked their pictures).
+ */
+function printSession(allowImages: boolean): Electron.Session {
+  const name = allowImages ? 'davenport-print-images' : 'davenport-print';
+  const s = session.fromPartition(name);
+  if (!configuredPrintSessions.has(name)) {
+    configuredPrintSessions.add(name);
+    s.setPermissionRequestHandler((_wc, _p, done) => done(false));
+    s.webRequest.onBeforeRequest((details, done) => {
+      const local = /^(data|blob):/i.test(details.url);
+      const isPage = details.resourceType === 'mainFrame' || details.resourceType === 'subFrame';
+      const remoteImage = allowImages && details.resourceType === 'image' && /^https?:/i.test(details.url);
+      done({ cancel: !(local && (!isPage || details.resourceType === 'mainFrame')) && !remoteImage });
+    });
+  }
+  return s;
+}
+const configuredPrintSessions = new Set<string>();
+
 async function renderOffscreen(m: MessageDetail): Promise<BrowserWindow> {
-  const win = new BrowserWindow({ show: false, webPreferences: { javascript: false, sandbox: true } });
+  const win = new BrowserWindow({ show: false, webPreferences: { javascript: false, sandbox: true, session: printSession(remoteImagesAllowed(m.from.email)) } });
+  win.webContents.on('will-navigate', (e) => e.preventDefault());
+  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   await win.loadURL('data:text/html;charset=utf-8;base64,' + Buffer.from(printableHtml(m)).toString('base64'));
   return win;
 }

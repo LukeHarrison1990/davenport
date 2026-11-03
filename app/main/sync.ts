@@ -2,7 +2,7 @@
 // calendar and tasks every 5 minutes, contacts every 30 minutes.
 import { powerMonitor } from 'electron';
 import { listAccounts, setStatus } from './services/accounts';
-import { checkSnoozes, kickOutbox, syncMail } from './services/mail';
+import { checkSnoozes, kickOutbox, recoverOutbox, syncMail } from './services/mail';
 import { checkReminders, syncCalendar } from './services/calendar';
 import { syncDirectory, syncPeople } from './services/people';
 import { syncTasks } from './services/tasks';
@@ -133,6 +133,7 @@ export function startScheduler(): void {
     checkReminders();
   }, 30_000);
   checkSnoozes();
+  recoverOutbox();
   kickOutbox();
   kick();
   // Catch up straight after the computer wakes or comes back online.

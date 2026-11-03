@@ -2,6 +2,7 @@
 import { app, BrowserWindow, clipboard, ClipboardItem, dialog, ipcMain, nativeImage, shell, type IpcMainInvokeEvent } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import type { Api } from '../shared/api';
 import type { QuickStep, SearchFolder, Template } from '../shared/types';
 import { kvAll, kvDelete, kvSet, uid } from './db';
@@ -101,6 +102,21 @@ const impl: Impl = {
     chrome: process.versions.chrome
   }),
   // Electron ships the licences of Chromium and its other components beside the app.
+  'app.askSaveDraft': async (c) => {
+    const win = BrowserWindow.fromWebContents(c.sender);
+    const opts = {
+      type: 'question' as const,
+      buttons: ['Save', "Don't save", 'Cancel'],
+      defaultId: 0,
+      cancelId: 2,
+      noLink: true,
+      title: 'Davenport',
+      message: 'Do you want to save this message as a draft?',
+      detail: 'Saved drafts are in your Drafts folder, in Davenport and in Gmail.'
+    };
+    const r = win ? await dialog.showMessageBox(win, opts) : await dialog.showMessageBox(opts);
+    return (['save', 'discard', 'cancel'] as const)[r.response] ?? 'cancel';
+  },
   'app.openThirdPartyLicences': async () => {
     const file = path.join(path.dirname(process.execPath), 'LICENSES.chromium.html');
     if (!fs.existsSync(file)) throw new Error("The third-party licence file isn't in this copy of Davenport.");
@@ -235,6 +251,7 @@ const impl: Impl = {
   'mail.unsnooze': (_c, a, ids) => mail.unsnooze(a, ids),
   'mail.send': (_c, d) => mail.send(d),
   'mail.cancelSend': (_c, id) => mail.cancelSend(id),
+  'mail.sendNow': (_c, id) => mail.sendNow(id),
   'mail.outbox': () => mail.outbox(),
   'mail.saveDraft': (_c, d) => mail.saveDraft(d),
   'mail.discardDraft': (_c, d) => mail.discardDraft(d),
@@ -339,10 +356,21 @@ const impl: Impl = {
   'chat.openSetup': (_c, a) => chat.openChatSetup(a)
 };
 
+/** True when a request comes from the top frame of one of Davenport's own windows. */
+function isAppFrame(event: IpcMainInvokeEvent): boolean {
+  const frame = event.senderFrame;
+  if (!frame || frame.parent) return false;
+  const url = frame.url;
+  if (process.env.DAVENPORT_DEV_URL && !app.isPackaged) return url.startsWith(process.env.DAVENPORT_DEV_URL);
+  return url.startsWith(pathToFileURL(path.join(__dirname, '..', 'renderer', 'index.html')).href);
+}
+
 export function registerIpc(): void {
   ipcMain.handle('api', async (event: IpcMainInvokeEvent, method: keyof Api, args: unknown[]) => {
-    const fn = impl[method] as ((ctx: Ctx, ...a: unknown[]) => unknown) | undefined;
-    if (!fn) throw new Error('Unknown method ' + method);
+    // Only Davenport's own pages may talk to the engine: never a message frame or anything else.
+    if (!isAppFrame(event)) throw new Error('Blocked a request from an unexpected page.');
+    if (typeof method !== 'string' || !Object.prototype.hasOwnProperty.call(impl, method) || !Array.isArray(args)) throw new Error('Unknown method ' + String(method));
+    const fn = impl[method] as (ctx: Ctx, ...a: unknown[]) => unknown;
     try {
       return { ok: true, value: await fn({ sender: event.sender }, ...args) };
     } catch (e) {

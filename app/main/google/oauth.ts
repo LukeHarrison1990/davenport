@@ -118,8 +118,14 @@ export async function signIn(opts: { scopes: string[]; loginHint?: string }): Pr
       const err = url.searchParams.get('error');
       const gotState = url.searchParams.get('state');
       const gotCode = url.searchParams.get('code');
-      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-      if (err || !gotCode || gotState !== state) {
+      // Anything that isn't Google's answer to this sign-in (a browser retry, another program probing the port)
+      // is ignored rather than cancelling the sign-in.
+      if (gotState !== state || (!err && !gotCode)) {
+        res.writeHead(400, { 'Content-Type': 'text/plain; charset=utf-8' }).end('This page is only used to finish signing in to Davenport.');
+        return;
+      }
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+      if (err || !gotCode) {
         res.end(PAGE('Sign-in was not completed', 'You can close this tab and try again from Davenport.'));
         cleanup();
         reject(new Error(err === 'access_denied' ? 'Sign-in was cancelled.' : 'Sign-in failed: ' + (err ?? 'invalid response')));
@@ -177,9 +183,11 @@ export async function signIn(opts: { scopes: string[]; loginHint?: string }): Pr
   const tokens = (await res.json()) as TokenSet & { error?: string; error_description?: string };
   if (!res.ok || tokens.error) throw new Error('Google refused the sign-in: ' + (tokens.error_description ?? tokens.error ?? res.status));
 
-  const info = await fetch('https://openidconnect.googleapis.com/v1/userinfo', {
+  const infoRes = await fetch('https://openidconnect.googleapis.com/v1/userinfo', {
     headers: { Authorization: 'Bearer ' + tokens.access_token }
-  }).then((r) => r.json() as Promise<{ email: string; name?: string; hd?: string }>);
+  });
+  const info = (await infoRes.json().catch(() => ({}))) as { email?: string; name?: string; hd?: string };
+  if (!infoRes.ok || !info.email) throw new Error("Signed in, but Google didn't say which account it was. Please try again.");
 
   return { tokens, email: info.email, name: info.name ?? info.email, hostedDomain: info.hd };
 }

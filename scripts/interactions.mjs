@@ -104,6 +104,36 @@ await check('inline reply, send with undo window, message appears in Sent', asyn
   if (!sent.some((m) => m.subject.startsWith('Re: Q4 budget'))) throw new Error('reply not in Sent');
 });
 
+await check("closing a compose window with the window's X asks before losing the message", async () => {
+  const wp = app.waitForEvent('window', { timeout: 8000 });
+  await win.keyboard.press('Control+N');
+  const compose = await wp;
+  await compose.waitForLoadState('domcontentloaded');
+  await compose.locator('#c-subject').waitFor();
+  await compose.locator('#c-subject').fill('Half-written note');
+  // Answer the Save / Don't save / Cancel question automatically: first Cancel, then Save.
+  const answer = (n) => app.evaluate(({ dialog }, n) => { dialog.showMessageBox = async () => ({ response: n, checkboxChecked: false }); }, n);
+  const closeLikeX = () => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find((w) => w.getTitle() !== 'Davenport' && /message|Half-written/i.test(w.getTitle()))?.close());
+  await answer(2);
+  await closeLikeX();
+  await compose.waitForTimeout(800);
+  if (compose.isClosed()) throw new Error('window closed although Cancel was chosen');
+  await answer(0);
+  const closed = compose.waitForEvent('close', { timeout: 6000 });
+  await closeLikeX();
+  await closed;
+  const drafts = await api('mail.list', { accountId: 'demo', folder: { type: 'label', id: 'DRAFT' } });
+  if (!drafts.some((d) => d.subject === 'Half-written note')) throw new Error('draft was not saved');
+});
+
+await check('About box shows the version and the MIT License', async () => {
+  await win.locator('.avatar-btn').click();
+  await win.getByRole('menuitem', { name: 'About Davenport' }).click();
+  await win.locator('.dialog .licence-text', { hasText: 'Permission is hereby granted, free of charge' }).waitFor();
+  await win.locator('.dialog', { hasText: /Version \d+\.\d+\.\d+/ }).waitFor();
+  await win.keyboard.press('Escape');
+});
+
 await check('new mail opens a compose window and sends', async () => {
   const L = (...x) => process.env.DAV_DEBUG && console.log('   ·', ...x);
   L('pressing');

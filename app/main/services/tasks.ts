@@ -28,13 +28,19 @@ const fromG = (accountId: string, listId: string, t: GTask, linked?: Task['linke
   id: t.id,
   title: t.title ?? '',
   notes: t.notes,
-  due: t.due ? Date.parse(t.due) : undefined,
+  due: t.due ? dueLocal(t.due) : undefined,
   completed: t.status === 'completed',
   completedAt: t.completed ? Date.parse(t.completed) : undefined,
   parent: t.parent,
   position: t.position,
   linkedMessage: linked
 });
+
+/** Google Tasks keeps only the date of a due date (sent as midnight UTC); read it as that date in local time. */
+function dueLocal(iso: string): number {
+  const [y, m, d] = iso.slice(0, 10).split('-').map(Number);
+  return new Date(y, m - 1, d).getTime();
+}
 
 const dueIso = (ms?: number) => {
   if (!ms) return undefined;

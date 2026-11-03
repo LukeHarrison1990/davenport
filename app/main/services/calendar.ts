@@ -208,10 +208,12 @@ export function events(start: number, end: number): CalEvent[] {
   for (const a of listAccounts()) {
     if (a.kind !== 'google') continue;
     const range = kvGet<{ start: number; end: number }>('calRange', a.id);
-    if (!range || start < range.start || end > range.end) {
-      const s = Math.min(start, range?.start ?? start) - 7 * 864e5;
-      const e = Math.max(end, range?.end ?? end) + 7 * 864e5;
-      void fetchRange(a.id, s, e).catch(() => undefined);
+    // Only download the part of the view that isn't cached yet (not everything in between).
+    const pad = 7 * 864e5;
+    if (!range) void fetchRange(a.id, start - pad, end + pad).catch(() => undefined);
+    else {
+      if (start < range.start) void fetchRange(a.id, start - pad, range.start).catch(() => undefined);
+      if (end > range.end) void fetchRange(a.id, range.end, end + pad).catch(() => undefined);
     }
   }
   return all<{ json: string }>(
@@ -271,13 +273,11 @@ export async function fetchRange(accountId: string, start: number, end: number, 
   }
 }
 
+/** Regular sync: refreshes two months back to a year ahead. Older or later dates you browse to are fetched when viewed. */
 export async function syncCalendar(accountId: string): Promise<void> {
   if (isDemo(accountId)) return;
   await syncCalendars(accountId);
-  const range = kvGet<{ start: number; end: number }>('calRange', accountId);
-  const start = Math.min(range?.start ?? Infinity, Date.now() - 60 * 864e5);
-  const end = Math.max(range?.end ?? 0, Date.now() + 365 * 864e5);
-  await fetchRange(accountId, start, end, undefined, true);
+  await fetchRange(accountId, Date.now() - 60 * 864e5, Date.now() + 365 * 864e5, undefined, true);
 }
 
 export function getEvent(accountId: string, calendarId: string, id: string): CalEvent {

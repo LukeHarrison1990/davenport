@@ -5,7 +5,15 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   root: 'app/renderer',
   base: './',
-  plugins: [react()],
+  plugins: [
+    react(),
+    {
+      // The development server's address is only needed while developing; production builds don't allow it.
+      name: 'davenport-production-csp',
+      apply: 'build',
+      transformIndexHtml: (html) => html.replace(/ ws:\/\/localhost:5199 http:\/\/localhost:5199/, '')
+    }
+  ],
   build: {
     outDir: '../../dist/renderer',
     emptyOutDir: true,

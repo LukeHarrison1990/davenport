@@ -12,6 +12,13 @@ export function registerOp(kind: string, handler: Handler): void {
   handlers.set(kind, handler);
 }
 
+// Called when Google refuses a change for good, so the local copy can be put back in step with Gmail.
+type FailureHook = (accountId: string, kind: string, payload: any, notFound: boolean) => Promise<void>;
+let onPermanentFailure: FailureHook | null = null;
+export function setPermanentFailureHook(fn: FailureHook): void {
+  onPermanentFailure = fn;
+}
+
 export function enqueue(accountId: string, kind: string, payload: unknown): void {
   if (isDemo(accountId)) return; // the demo account lives only in the local cache
   run('INSERT INTO pending_ops (account_id, kind, payload) VALUES (?, ?, ?)', accountId, kind, JSON.stringify(payload));
@@ -66,7 +73,10 @@ async function drain(): Promise<void> {
         const permanent = e instanceof GoogleApiError && e.status >= 400 && e.status < 500 && e.status !== 429;
         if (permanent || op.attempts >= 8) {
           run('DELETE FROM pending_ops WHERE seq = ?', op.seq);
-          toast({ kind: 'error', text: `Couldn't sync a change to Google: ${(e as Error).message}` });
+          const notFound = e instanceof GoogleApiError && e.status === 404;
+          // A message that's already gone from Gmail needs no warning; anything else does.
+          if (!notFound) toast({ kind: 'error', text: `Couldn't sync a change to Google: ${(e as Error).message}` });
+          await onPermanentFailure?.(op.account_id, op.kind, JSON.parse(op.payload), notFound).catch(() => undefined);
         } else {
           const wait = Math.min(5 * 60_000, 2000 * 2 ** op.attempts);
           run('UPDATE pending_ops SET attempts = attempts + 1, next_try = ?, last_error = ? WHERE seq = ?', now + wait, String(e), op.seq);

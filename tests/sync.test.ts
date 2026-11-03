@@ -170,11 +170,19 @@ describe('Gmail sync', () => {
     expect(mail.outbox()).toHaveLength(0);
   });
 
-  it('starts again when Gmail history has expired', async () => {
+  it('catches up properly when Gmail history has expired', async () => {
+    // While "offline": one message is deleted on the server and another is read and archived elsewhere.
+    const kept = [...server.messages.values()].find((m) => m.labelIds.includes('INBOX'))!;
+    const removed = [...server.messages.values()].find((m) => m.id !== kept.id)!;
+    server.messages.delete(removed.id);
+    kept.labelIds = kept.labelIds.filter((l) => l !== 'INBOX' && l !== 'UNREAD');
     run("UPDATE accounts SET history_id = '10' WHERE id = 'g1'");
     server.history = [];
     await mail.syncMail('g1');
     expect(get<{ history_id: string }>("SELECT history_id FROM accounts WHERE id = 'g1'")?.history_id).toBe(String(server.historyId));
+    expect(store.getSummary('g1', removed.id)).toBeUndefined();
+    expect(store.getSummary('g1', kept.id)?.labelIds).not.toContain('INBOX');
+    expect(store.getSummary('g1', kept.id)?.unread).toBe(false);
   });
 
   it('waits out Google rate limits and finishes the sync', async () => {

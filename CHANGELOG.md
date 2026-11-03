@@ -1,5 +1,32 @@
 # Changelog
 
+## 1.0.17 — 2026-11-03
+
+A full review of the app for bugs and security problems.
+
+**Security**
+- Attachments: programs, scripts, shortcuts and disk images (.exe, .js, .lnk, .iso and the rest of Outlook's blocked list) are no longer opened straight from an email; you can still save them. Every attachment Davenport opens or saves is marked as downloaded from the internet, so Windows SmartScreen warns before running it and Office opens it in Protected View.
+- Replying to or forwarding an email no longer lets its styles restyle Davenport's window while you write, and its remote pictures don't load while you write if you've blocked pictures (recipients still get them).
+- Print and Save as PDF no longer load remote pictures you've blocked, and can't be redirected to another page by the email.
+- Outgoing headers are cleaned: a malformed address or a crafted email being replied to can no longer add headers such as Bcc to your message. Invalid addresses are caught when you press Send.
+- The engine only accepts requests from Davenport's own windows; web pages get no camera, microphone or location access; test-only switches are ignored in the installed app; the development server is no longer allowed by the production content policy.
+- Sign-in ignores stray requests to its local callback instead of cancelling, and checks that Google says which account signed in.
+
+**Fixes**
+- Compose: closing the window with ✕ now asks Save / Don't save / Cancel instead of losing what you'd typed since the last autosave. Sending while an autosave is in progress no longer leaves a stray draft.
+- Outbox: a message that was sending when Davenport closed is marked so you can check Sent and send it again, instead of being stuck. A message Gmail has accepted is never marked failed by a later hiccup (which risked sending it twice). Failed and scheduled messages have Send again / Send now.
+- "Always show pictures from this sender" now works; before, it was saved but not used.
+- After a week or more offline (when Gmail's change history has expired), or after a very large number of changes, Davenport now updates every cached message and removes deleted ones, instead of only adding new mail.
+- Discarding a draft removes only that draft, not every draft with the same subject.
+- Deleting a folder that Gmail refuses to delete reports the problem instead of hiding the folder until the next sync.
+- If Google permanently refuses a change, Davenport re-reads those messages so what you see matches Gmail; messages already deleted on the server are dropped quietly.
+- Calendar only downloads the dates you browse to, and the regular sync covers two months back to a year ahead, instead of re-downloading everything you've ever looked at every five minutes.
+- mailto: links with several addresses, cc and bcc open correctly.
+- Task due dates are read as dates, so they no longer shift by a day for people west of the UK.
+
+**About box**
+- Rewritten as a standard About box: version, copyright, the MIT License, the website and third-party licences.
+
 ## 1.0.16 — 2026-11-02
 
 - Conversation view now works like Gmail and Outlook: each conversation in the message list shows the time and preview of its newest message, including your own replies, and moves up the list when anyone replies. The sender column lists who's in the conversation ("Nicola, me"). The row still stands for the message in that folder, so moving, deleting and archiving work as before.

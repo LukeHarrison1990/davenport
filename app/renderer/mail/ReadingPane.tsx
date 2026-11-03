@@ -133,8 +133,8 @@ function ThreadMessage({ m, expandedByDefault, single, onReply, onMenu, onContex
   const { settings } = useApp();
 
   useEffect(() => {
-    setAllowRemote(!settings.blockRemoteImages);
-  }, [m.id, settings.blockRemoteImages]);
+    setAllowRemote(m.remoteImagesAllowed ?? !settings.blockRemoteImages);
+  }, [m.id, m.remoteImagesAllowed, settings.blockRemoteImages]);
 
   const attachments = m.attachments.filter((a) => !a.contentId);
 

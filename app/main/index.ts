@@ -1,5 +1,5 @@
 // Davenport — background engine entry point.
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, session, shell } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
 import { openDatabase } from './db';
@@ -11,9 +11,22 @@ import { getSettings } from './settings';
 import { listAccounts } from './services/accounts';
 import { newDraft } from './services/mail';
 import { emit } from './events';
+import { parseMailto, type MailtoParts } from './mailto';
 
-if (process.env.DAVENPORT_NO_SANDBOX) app.commandLine.appendSwitch('no-sandbox');
-if (process.env.DAVENPORT_USER_DATA) app.setPath('userData', process.env.DAVENPORT_USER_DATA);
+// Test-only switches (used by the automated checks); the installed app ignores them.
+if (!app.isPackaged) {
+  if (process.env.DAVENPORT_NO_SANDBOX) app.commandLine.appendSwitch('no-sandbox');
+  if (process.env.DAVENPORT_USER_DATA) app.setPath('userData', process.env.DAVENPORT_USER_DATA);
+}
+
+// Defence in depth for every web page Davenport ever creates.
+app.on('web-contents-created', (_e, contents) => {
+  contents.on('will-attach-webview', (ev) => ev.preventDefault());
+  contents.setWindowOpenHandler(({ url }) => {
+    if (/^(https?|mailto):/i.test(url)) void shell.openExternal(url);
+    return { action: 'deny' };
+  });
+});
 
 app.setAppUserModelId('app.davenport.desktop');
 
@@ -41,6 +54,10 @@ if (!app.requestSingleInstanceLock()) {
   });
 
   app.whenReady().then(async () => {
+    // Pages get no camera, microphone, location or similar access; notifications and copying to the clipboard only.
+    const allowed = new Set(['notifications', 'clipboard-sanitized-write']);
+    session.defaultSession.setPermissionRequestHandler((_wc, permission, done) => done(allowed.has(permission)));
+    session.defaultSession.setPermissionCheckHandler((_wc, permission) => allowed.has(permission));
     openDatabase(app.getPath('userData'));
     registerIpc();
     buildMenu();
@@ -75,22 +92,24 @@ if (!app.requestSingleInstanceLock()) {
   });
 }
 
-async function openNewMail(to?: string, subject?: string, body?: string): Promise<void> {
+async function openNewMail(m: MailtoParts = { to: [], cc: [], bcc: [] }): Promise<void> {
   const acc = listAccounts()[0];
   if (!acc) {
     focusMain();
     return;
   }
-  const d = await newDraft(acc.id, to);
-  if (subject) d.subject = subject;
-  if (body) d.html = `<p>${body.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/\n/g, '<br>')}</p>` + d.html;
+  const d = await newDraft(acc.id);
+  d.to = m.to.map((email) => ({ email }));
+  d.cc = m.cc.map((email) => ({ email }));
+  d.bcc = m.bcc.map((email) => ({ email }));
+  if (m.subject) d.subject = m.subject;
+  if (m.body) d.html = `<p>${m.body.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\r?\n/g, '<br>')}</p>` + d.html;
   openChildWindow('compose', { draft: JSON.stringify(d) });
 }
 
 async function openMailto(url: string): Promise<void> {
   try {
-    const u = new URL(url);
-    await openNewMail(decodeURIComponent(u.pathname), u.searchParams.get('subject') ?? undefined, u.searchParams.get('body') ?? undefined);
+    await openNewMail(parseMailto(url));
   } catch {
     focusMain();
   }

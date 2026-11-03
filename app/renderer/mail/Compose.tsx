@@ -6,7 +6,7 @@ import { AddressInput } from '../components/AddressInput';
 import { Icon } from '../components/Icon';
 import { openMenu } from '../components/Menu';
 import { RichEditor, type RichEditorHandle } from '../components/RichEditor';
-import { fail, notify } from '../state';
+import { fail, notify, useApp } from '../state';
 import { bytes, fileKind, fromLocalInput, quickTimes, toLocalInput } from '../util';
 
 export function Compose({ initial, inline, onClose }: { initial: Draft; inline?: boolean; onClose: (sent: boolean) => void }) {
@@ -18,6 +18,7 @@ export function Compose({ initial, inline, onClose }: { initial: Draft; inline?:
   const [saving, setSaving] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [pickLater, setPickLater] = useState(false);
   const [laterValue, setLaterValue] = useState(() => toLocalInput(quickTimes()[0].at));
+  const blockImages = useApp((st) => st.settings.blockRemoteImages);
   const dirty = useRef(false);
   const editor = useRef<RichEditorHandle>(null);
   const latest = useRef(d);
@@ -47,7 +48,19 @@ export function Compose({ initial, inline, onClose }: { initial: Draft; inline?:
     setD((x) => ({ ...x, ...p }));
   };
 
-  const save = async (quiet = false) => {
+  // One save at a time; sending waits for a save in progress so it can't leave a stray draft behind.
+  const saving$ = useRef<Promise<void> | null>(null);
+  const finished = useRef(false);
+  const save = (quiet = false): Promise<void> => {
+    if (finished.current) return Promise.resolve();
+    const run = (saving$.current ?? Promise.resolve()).then(() => doSave(quiet));
+    saving$.current = run.finally(() => {
+      if (saving$.current === run) saving$.current = null;
+    });
+    return run;
+  };
+  const doSave = async (quiet: boolean) => {
+    if (finished.current) return;
     setSaving('saving');
     try {
       const r = await call('mail.saveDraft', latest.current);
@@ -69,7 +82,10 @@ export function Compose({ initial, inline, onClose }: { initial: Draft; inline?:
     const mentionsAttachment = /\b(attached|attachment|enclosed)\b/i.test(draft.html.replace(/<blockquote[\s\S]*<\/blockquote>/i, ''));
     if (mentionsAttachment && !draft.attachments.length && !window.confirm('Your message mentions an attachment, but nothing is attached. Send anyway?')) return;
     try {
+      await saving$.current?.catch(() => undefined);
+      draft.gmailDraftId = latest.current.gmailDraftId;
       await call('mail.send', draft);
+      finished.current = true;
       if (draft.gmailDraftId && sendAt) await call('mail.discardDraft', draft).catch(() => undefined);
       dirty.current = false;
       onClose(true);
@@ -80,18 +96,38 @@ export function Compose({ initial, inline, onClose }: { initial: Draft; inline?:
 
   const discard = async () => {
     if (dirty.current && !window.confirm('Discard this message?')) return;
-    if (d.gmailDraftId) await call('mail.discardDraft', d).catch(() => undefined);
+    await saving$.current?.catch(() => undefined);
+    finished.current = true;
+    if (latest.current.gmailDraftId) await call('mail.discardDraft', latest.current).catch(() => undefined);
     dirty.current = false;
     onClose(false);
   };
 
+  // Like Outlook: closing with unsaved changes asks Save / Don't save / Cancel.
   const close = async () => {
     if (dirty.current) {
-      const keep = window.confirm('Save this message as a draft?');
-      if (keep) await save(true);
+      const answer = await call('app.askSaveDraft');
+      if (answer === 'cancel') return;
+      if (answer === 'save') await save(true);
     }
+    finished.current = true;
+    dirty.current = false;
     onClose(false);
   };
+
+  // The window's own close button (✕) goes through the same question instead of losing the message.
+  useEffect(() => {
+    if (inline) return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (!dirty.current || finished.current) return;
+      e.preventDefault();
+      e.returnValue = '';
+      void close();
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inline]);
 
   const attach = async () => {
     const files = await call('app.pickFiles');
@@ -257,7 +293,7 @@ export function Compose({ initial, inline, onClose }: { initial: Draft; inline?:
           {total > 25 * 1024 * 1024 && <span className="hint-text" style={{ alignSelf: 'center' }}>Over 25 MB — these will be shared as Google Drive links.</span>}
         </div>
       )}
-      <RichEditor ref={editor} initialHtml={d.html} onChange={(html) => update({ html })} minHeight={inline ? 200 : 260} />
+      <RichEditor ref={editor} initialHtml={d.html} onChange={(html) => update({ html })} minHeight={inline ? 200 : 260} holdImages={blockImages} />
     </div>
   );
 }

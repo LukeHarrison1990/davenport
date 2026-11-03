@@ -14,6 +14,7 @@ export interface Api {
   'app.openWindow'(kind: 'compose' | 'event' | 'message', params: Record<string, string>): void;
   'app.copyText'(text: string): void;
   'app.openThirdPartyLicences'(): void;
+  'app.askSaveDraft'(): 'save' | 'discard' | 'cancel';
   'app.copyImage'(src: string): void;
   'app.saveImage'(src: string): string | null;
   'app.closeWindow'(): void;
@@ -60,6 +61,7 @@ export interface Api {
   'mail.unsnooze'(accountId: string, ids: string[]): void;
   'mail.send'(draft: Draft): { outboxId: string; sendAt: number };
   'mail.cancelSend'(outboxId: string): Draft | null;
+  'mail.sendNow'(outboxId: string): void;
   'mail.outbox'(): OutboxItem[];
   'mail.saveDraft'(draft: Draft): { gmailDraftId?: string };
   'mail.discardDraft'(draft: Draft): void;
