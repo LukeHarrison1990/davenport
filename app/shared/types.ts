@@ -462,6 +462,8 @@ export interface AppInfo {
   arch: string;
   userDataPath: string;
   hasOAuthClient: boolean;
+  electron?: string;
+  chrome?: string;
 }
 
 export type ChangeScope =

@@ -5,6 +5,7 @@ import { call, useLive } from '../api';
 import { Icon, Logo } from '../components/Icon';
 import { Dialog, Field } from '../components/ui';
 import { fail, notify, useApp } from '../state';
+import licenceText from '../../../LICENSE?raw';
 
 const CAT_COLOURS = ['#24497A', '#2E7D5B', '#9A7740', '#7A4E9C', '#B3361F', '#1E7A8A', '#5C6B2E', '#5B6472'];
 
@@ -347,18 +348,33 @@ export function SettingsDialog({ arg, onClose }: { arg?: unknown; onClose: () =>
 }
 
 function About({ info }: { info: AppInfo | null }) {
+  const arch = info ? ({ x64: '64-bit', arm64: 'ARM64', ia32: '32-bit' } as Record<string, string>)[info.arch] ?? info.arch : '';
   return (
-    <>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '12px 0' }}>
-        <Logo size={50} tile />
+    <div className="about">
+      <div className="about-head">
+        <Logo size={56} tile />
         <div>
-          <div style={{ fontSize: 18, fontWeight: 600 }}>Davenport {info?.version}</div>
-          <div className="hint-text">{info?.platform} · {info?.arch}</div>
+          <div className="about-name">Davenport</div>
+          <div>Version {info?.version ?? '…'}{arch ? ` (${arch})` : ''}</div>
+          <div className="hint-text">Copyright © 2026 Davenport contributors</div>
         </div>
       </div>
-      <p className="hint-text">A davenport is a small writing desk with drawers for keeping correspondence in order. Davenport is an Outlook-style desktop client for Google Workspace.</p>
-      <p className="hint-text">Your data is stored on this computer in {info?.userDataPath}. Sign-in tokens are encrypted by your operating system.</p>
-    </>
+      <p>A desktop email, calendar, contacts and chat app for Google Workspace.</p>
+      <p>
+        Davenport is free software, licensed under the MIT License:
+      </p>
+      <div className="licence-text" tabIndex={0} role="document" aria-label="MIT License">
+        {/* LICENSE is hard-wrapped at 80 columns; reflow each paragraph to fit the box. */}
+        {licenceText.trim().split(/\n\s*\n/).map((para, i) => <p key={i}>{para.replace(/\s*\n\s*/g, ' ')}</p>)}
+      </div>
+      <div className="about-links">
+        <button className="btn ghost small" onClick={() => call('app.openExternal', 'https://davenport-app.com')}><Icon name="globe" size={14} /> davenport-app.com</button>
+        <button className="btn ghost small" onClick={() => call('app.openThirdPartyLicences').catch(fail)}><Icon name="list" size={14} /> Third-party licences</button>
+      </div>
+      {info?.electron && (
+        <p className="hint-text" style={{ marginBottom: 0 }}>Built with Electron {info.electron} and Chromium {info.chrome}. Your data is stored on this computer in {info.userDataPath}.</p>
+      )}
+    </div>
   );
 }
 

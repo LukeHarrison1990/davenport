@@ -13,6 +13,7 @@ export interface Api {
   'app.openExternal'(url: string): void;
   'app.openWindow'(kind: 'compose' | 'event' | 'message', params: Record<string, string>): void;
   'app.copyText'(text: string): void;
+  'app.openThirdPartyLicences'(): void;
   'app.copyImage'(src: string): void;
   'app.saveImage'(src: string): string | null;
   'app.closeWindow'(): void;

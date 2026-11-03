@@ -96,8 +96,17 @@ const impl: Impl = {
     platform: process.platform,
     arch: process.arch,
     userDataPath: app.getPath('userData'),
-    hasOAuthClient: !!getOAuthClient()
+    hasOAuthClient: !!getOAuthClient(),
+    electron: process.versions.electron,
+    chrome: process.versions.chrome
   }),
+  // Electron ships the licences of Chromium and its other components beside the app.
+  'app.openThirdPartyLicences': async () => {
+    const file = path.join(path.dirname(process.execPath), 'LICENSES.chromium.html');
+    if (!fs.existsSync(file)) throw new Error("The third-party licence file isn't in this copy of Davenport.");
+    const err = await shell.openPath(file);
+    if (err) throw new Error(err);
+  },
   'app.openExternal': (_c, url) => {
     if (/^(https?|mailto):/i.test(url)) void shell.openExternal(url);
   },

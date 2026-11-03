@@ -587,3 +587,13 @@ textarea.input { min-height: 90px; resize: vertical; font-family: var(--font); }
 @media (max-width: 960px) {
   .folder-pane { flex-basis: 200px; }
 }
+
+/* About */
+.about { display: grid; gap: 12px; }
+.about p { margin: 0; }
+.about-head { display: flex; align-items: center; gap: 14px; margin-top: 4px; }
+.about-name { font-size: 20px; font-weight: 600; font-family: var(--font-display); }
+.licence-text { margin: 0; max-height: 220px; overflow: auto; font-size: 12px; line-height: 1.5; color: var(--text-2); background: var(--pane); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; }
+.licence-text p { margin: 0 0 8px; }
+.licence-text p:last-child { margin-bottom: 0; }
+.about-links { display: flex; gap: 8px; flex-wrap: wrap; }
