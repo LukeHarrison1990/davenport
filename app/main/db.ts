@@ -5,7 +5,7 @@ import fs from 'node:fs';
 
 let db: DatabaseSync;
 
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
@@ -32,7 +32,8 @@ CREATE TABLE IF NOT EXISTS messages (
   PRIMARY KEY (account_id, id)
 );
 CREATE INDEX IF NOT EXISTS msg_date ON messages(account_id, date DESC);
-CREATE INDEX IF NOT EXISTS msg_thread ON messages(account_id, thread_id);
+-- Conversations: find a thread's messages in date order without scanning the whole mailbox.
+CREATE INDEX IF NOT EXISTS msg_thread_date ON messages(account_id, thread_id, date);
 
 -- Many-to-many message <-> label for fast folder listing and counts.
 CREATE TABLE IF NOT EXISTS message_labels (
@@ -94,6 +95,9 @@ export function openDatabase(userDataDir: string, file = 'davenport.db'): Databa
   const v = get<{ value: string }>('SELECT value FROM meta WHERE key = ?', 'schema');
   const from = v ? Number(v.value) : SCHEMA_VERSION;
   if (from < 2) migrateSearchIndex();
+  if (from < 3) db.exec('DROP INDEX IF EXISTS msg_thread');
+  // Keep SQLite's statistics current so it picks the right index (cheap; only re-analyses what changed).
+  db.exec('PRAGMA optimize = 0x10002');
   run('INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value', 'schema', String(SCHEMA_VERSION));
   return db;
 }

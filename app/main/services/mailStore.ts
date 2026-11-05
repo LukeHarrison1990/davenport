@@ -179,11 +179,13 @@ export function snoozeLabelId(accountId: string): string | undefined {
 export function folders(accountId: string): Folder[] {
   const counts = new Map<string, { total: number; unread: number }>();
   for (const r of all<{ label_id: string; total: number; unread: number }>(
-    `SELECT l.label_id, COUNT(*) AS total, SUM(m.unread) AS unread FROM message_labels l
-     JOIN messages m ON m.account_id = l.account_id AND m.id = l.message_id
-     WHERE l.account_id = ? AND (l.label_id IN ('TRASH', 'SPAM') OR (m.labels NOT LIKE '%"TRASH"%' AND m.labels NOT LIKE '%"SPAM"%'))
+    // Counted from the label table alone (UNREAD, TRASH and SPAM are labels too), without reading the messages.
+    `WITH binned AS MATERIALIZED (SELECT message_id FROM message_labels WHERE account_id = ? AND label_id IN ('TRASH', 'SPAM')),
+          unread AS MATERIALIZED (SELECT message_id FROM message_labels WHERE account_id = ? AND label_id = 'UNREAD')
+     SELECT l.label_id, COUNT(*) AS total, SUM(l.message_id IN unread) AS unread FROM message_labels l
+     WHERE l.account_id = ? AND (l.label_id IN ('TRASH', 'SPAM') OR l.message_id NOT IN binned)
      GROUP BY l.label_id`,
-    accountId
+    accountId, accountId, accountId
   )) {
     counts.set(r.label_id, { total: r.total, unread: r.unread ?? 0 });
   }
@@ -371,9 +373,13 @@ export function list(q: ListQuery): MessageSummary[] {
     where.push('m.account_id = ?');
     params.push(q.accountId);
   }
+  // "Doesn't have label X" as one lookup list built once per query, rather than a check per message.
+  // Labels are checked against an id list built once per query (much faster than a lookup per message).
+  // Gmail message ids are unique, so for the unified views the list can span accounts.
+  const acct = q.accountId !== 'all' ? q.accountId : undefined;
   const lacksLabel = (label: string) => {
-    where.push('NOT EXISTS (SELECT 1 FROM message_labels x WHERE x.account_id = m.account_id AND x.message_id = m.id AND x.label_id = ?)');
-    params.push(label);
+    where.push(`m.id NOT IN (SELECT x.message_id FROM message_labels x WHERE x.label_id = ?${acct ? ' AND x.account_id = ?' : ''})`);
+    params.push(label, ...(acct ? [acct] : []));
   };
 
   const f = q.folder;
@@ -393,7 +399,7 @@ export function list(q: ListQuery): MessageSummary[] {
         // Gmail keeps a message's other labels when it's binned; like Gmail, only Bin and Spam show those.
         if (f.id !== 'TRASH') lacksLabel('TRASH');
         if (f.id !== 'SPAM' && f.id !== 'TRASH') lacksLabel('SPAM');
-        if (f.id === 'INBOX' && q.tab && q.tab !== 'all' && s.focusedInbox !== 'off') applyFocused(q.tab, s.focusedInbox, where, params);
+        if (f.id === 'INBOX' && q.tab && q.tab !== 'all' && s.focusedInbox !== 'off') applyFocused(q.tab, s.focusedInbox, where, params, acct);
       }
       break;
     case 'unified': {
@@ -402,7 +408,7 @@ export function list(q: ListQuery): MessageSummary[] {
       params.unshift(label);
       lacksLabel('TRASH');
       lacksLabel('SPAM');
-      if (label === 'INBOX' && q.tab && q.tab !== 'all' && s.focusedInbox !== 'off') applyFocused(q.tab, s.focusedInbox, where, params);
+      if (label === 'INBOX' && q.tab && q.tab !== 'all' && s.focusedInbox !== 'off') applyFocused(q.tab, s.focusedInbox, where, params, acct);
       break;
     }
     case 'flagged':
@@ -437,19 +443,24 @@ export function list(q: ListQuery): MessageSummary[] {
 
   const limit = q.limit ?? 200;
   const offset = q.offset ?? 0;
-  const base = `SELECT m.* FROM messages m ${join} ${where.length ? 'WHERE ' + where.join(' AND ') : ''}`;
+  const filter = `FROM messages m ${join} ${where.length ? 'WHERE ' + where.join(' AND ') : ''}`;
   const threaded = s.conversationView && f.type !== 'search' && !(f.type === 'label' && (f.id === 'DRAFT' || f.id === 'SENT'));
+  // Conversation view groups the folder's messages by thread using only the small columns, then loads full
+  // rows for just the page being shown (copying every message's body into the grouping step was the slow part).
   const sql = threaded
-    ? `WITH f AS (${base}),
-       r AS (SELECT f.*, ROW_NUMBER() OVER (PARTITION BY account_id, thread_id ORDER BY date DESC) AS rn,
-             MAX(unread) OVER (PARTITION BY account_id, thread_id) AS any_unread FROM f)
-       SELECT r.*, (SELECT COUNT(*) FROM messages t WHERE t.account_id = r.account_id AND t.thread_id = r.thread_id
-             AND t.labels NOT LIKE '%"TRASH"%' AND t.labels NOT LIKE '%"SPAM"%') AS cnt,
-             -- Like Gmail and Outlook, a conversation sorts by its newest message, your replies included.
-             COALESCE((SELECT MAX(t.date) FROM messages t WHERE t.account_id = r.account_id AND t.thread_id = r.thread_id
-             AND t.labels NOT LIKE '%"TRASH"%' AND t.labels NOT LIKE '%"SPAM"%' AND t.labels NOT LIKE '%"DRAFT"%'), r.date) AS last_date
-       FROM r WHERE rn = 1 ORDER BY last_date DESC LIMIT ? OFFSET ?`
-    : `${base} ORDER BY m.date DESC LIMIT ? OFFSET ?`;
+    ? `WITH f AS MATERIALIZED (SELECT m.account_id, m.id, m.thread_id, m.date, m.unread ${filter}),
+       g AS (SELECT f.*, ROW_NUMBER() OVER (PARTITION BY account_id, thread_id ORDER BY date DESC) AS rn,
+             MAX(unread) OVER (PARTITION BY account_id, thread_id) AS any_unread FROM f),
+       -- Like Gmail and Outlook, a conversation sorts by its newest message, your replies included.
+       h AS (SELECT g.account_id, g.id, g.any_unread,
+             COALESCE((SELECT MAX(t.date) FROM messages t WHERE t.account_id = g.account_id AND t.thread_id = g.thread_id
+               AND t.labels NOT LIKE '%"TRASH"%' AND t.labels NOT LIKE '%"SPAM"%' AND t.labels NOT LIKE '%"DRAFT"%'), g.date) AS last_date
+             FROM g WHERE rn = 1 ORDER BY last_date DESC LIMIT ? OFFSET ?)
+       SELECT m.*, h.any_unread, h.last_date,
+             (SELECT COUNT(*) FROM messages t WHERE t.account_id = m.account_id AND t.thread_id = m.thread_id
+               AND t.labels NOT LIKE '%"TRASH"%' AND t.labels NOT LIKE '%"SPAM"%') AS cnt
+       FROM h JOIN messages m ON m.account_id = h.account_id AND m.id = h.id ORDER BY h.last_date DESC`
+    : `SELECT m.* ${filter} ORDER BY m.date DESC LIMIT ? OFFSET ?`;
   const rows = all<MsgRow>(sql, ...params, limit, offset);
   const catCache = new Map<string, Map<string, { name: string; color: string }>>();
   return rows.map((r) => {
@@ -489,14 +500,16 @@ function withLatest(s: MessageSummary): MessageSummary {
   return { ...s, date: latest.date, snippet: latest.snippet, threadSenders: people.length === 1 && !people[0].me ? undefined : senders };
 }
 
-function applyFocused(tab: 'focused' | 'other', mode: 'categories' | 'important', where: string[], params: (string | number)[]) {
+function applyFocused(tab: 'focused' | 'other', mode: 'categories' | 'important', where: string[], params: (string | number)[], acct?: string) {
+  const scope = acct ? ' AND x.account_id = ?' : '';
   if (mode === 'important') {
-    where.push(`${tab === 'focused' ? '' : 'NOT '}EXISTS (SELECT 1 FROM message_labels x WHERE x.account_id = m.account_id AND x.message_id = m.id AND x.label_id = 'IMPORTANT')`);
+    where.push(`m.id ${tab === 'focused' ? '' : 'NOT '}IN (SELECT x.message_id FROM message_labels x WHERE x.label_id = 'IMPORTANT'${scope})`);
+    if (acct) params.push(acct);
     return;
   }
   const placeholders = OTHER_CATEGORIES.map(() => '?').join(',');
-  where.push(`${tab === 'focused' ? 'NOT ' : ''}EXISTS (SELECT 1 FROM message_labels x WHERE x.account_id = m.account_id AND x.message_id = m.id AND x.label_id IN (${placeholders}))`);
-  params.push(...OTHER_CATEGORIES);
+  where.push(`m.id ${tab === 'focused' ? 'NOT ' : ''}IN (SELECT x.message_id FROM message_labels x WHERE x.label_id IN (${placeholders})${scope})`);
+  params.push(...OTHER_CATEGORIES, ...(acct ? [acct] : []));
 }
 
 export function threadMessages(accountId: string, threadId: string): string[] {

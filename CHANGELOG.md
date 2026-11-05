@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.0.18 — 2026-11-05
+
+Davenport is responsive again.
+
+**Fixes**
+- The message list had become slow on large mailboxes. 1.0.16 changed the list to show each conversation's latest message, but the database looked conversations up the slow way. With around 20,000 cached messages, each refresh of the Inbox took about 1.4 seconds. The database works on the same thread that handles the window, so while it worked, the window couldn't react to the mouse. That's why hovering and clicks lagged, and it happened every time new mail arrived or a sync finished. Lists now load in 20–50 ms:
+
+  | List (20,000 messages) | 1.0.17 | 1.0.18 |
+  |---|---|---|
+  | Inbox, Primary tab | 1,450 ms | 49 ms |
+  | Inbox, all | 1,396 ms | 26 ms |
+  | Unified inbox | 1,378 ms | 32 ms |
+  | Folder counts | 48 ms | 33 ms |
+
+- Each sync no longer reloads the folder pane, unread badges and account list when nothing has changed. Before, it did this every 45 seconds or so for each account.
+- The first time 1.0.18 starts, it rebuilds one database index. This takes a moment on a big mailbox and only happens once.
+
 ## 1.0.17 — 2026-11-03
 
 A full review of the app for bugs and security problems.

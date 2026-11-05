@@ -61,6 +61,10 @@ export function client(accountId: string): GoogleClient {
 }
 
 export function setStatus(accountId: string, status: Account['status'], error?: string): void {
+  // Every sync reports its status; only tell the window when it actually changes, or each sync would
+  // reload the folder pane, counts and account list for nothing.
+  const cur = get<{ status: string; error: string | null }>('SELECT status, error FROM accounts WHERE id = ?', accountId);
+  if (cur && cur.status === status && (cur.error ?? undefined) === (error ?? undefined)) return;
   run('UPDATE accounts SET status = ?, error = ? WHERE id = ?', status, error ?? null, accountId);
   emit('syncStatus', { accountId, status, detail: error });
   changed('accounts');

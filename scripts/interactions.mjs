@@ -188,7 +188,11 @@ await check('delete from a folder other than the inbox removes it', async () => 
 });
 
 await check('bottom reading pane sits above the status bar', async () => {
+  const t0 = Date.now();
   await api('settings.set', { readingPane: 'bottom' });
+  await win.locator('.mail-split.bottom').waitFor({ timeout: 2000 });
+  const lag = Date.now() - t0;
+  if (lag > 500) throw new Error('layout took ' + lag + ' ms to switch');
   await win.locator('#message-list .row').first().click();
   await win.locator('.reading iframe.message-frame').first().waitFor();
   const sb = await win.locator('.statusbar').boundingBox();
@@ -197,6 +201,7 @@ await check('bottom reading pane sits above the status bar', async () => {
   if (rp.height < 150) throw new Error('reading pane too small: ' + rp.height);
   if (lp.y + lp.height > rp.y + 1 || rp.y + rp.height > sb.y + 1) throw new Error('panes overlap the status bar ' + JSON.stringify({lp, rp, sb}));
   await api('settings.set', { readingPane: 'right' });
+  await win.locator('.mail-split:not(.bottom)').waitFor({ timeout: 2000 });
 });
 
 await check('Send / Receive shows progress, then says it finished', async () => {
