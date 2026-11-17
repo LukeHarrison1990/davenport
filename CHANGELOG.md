@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.19 — 2026-11-17
+
+**Fixes**
+- Delete forever and Empty Bin now really delete messages. Before, Davenport removed them from its own list, but Gmail refused the request because Davenport hadn't asked for permission to permanently delete, so the messages stayed in the Bin online. Davenport now asks for full access to the mailbox, as Outlook does.
+- Accounts signed in before this version are asked to sign in again the first time you permanently delete something. You only need to do this once per account. If you'd rather not, nothing is deleted, and Gmail empties the Bin after 30 days as usual.
+
+**For your own Google Cloud project**
+- If you use your own OAuth client, add the `https://mail.google.com/` scope to its data access list in place of `gmail.modify`.
+
 ## 1.0.18 — 2026-11-05
 
 Davenport is responsive again.

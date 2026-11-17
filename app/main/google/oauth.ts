@@ -8,11 +8,14 @@ import path from 'node:path';
 import { kvGet, kvSet } from '../db';
 import { seal, unseal } from '../secure';
 
+/** Full Gmail access: everything gmail.modify allows, plus permanently deleting messages (Delete forever, Empty Bin). */
+export const FULL_MAIL_SCOPE = 'https://mail.google.com/';
+
 export const BASE_SCOPES = [
   'openid',
   'email',
   'profile',
-  'https://www.googleapis.com/auth/gmail.modify',
+  FULL_MAIL_SCOPE,
   'https://www.googleapis.com/auth/gmail.settings.basic',
   'https://www.googleapis.com/auth/calendar',
   'https://www.googleapis.com/auth/contacts',

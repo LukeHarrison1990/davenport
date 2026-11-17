@@ -10,7 +10,8 @@ import { Gmail, ruleToQuery, type GFilter, type ParsedMessage } from '../google/
 import { GoogleApiError, QuotaExceeded, ReauthRequired } from '../google/http';
 import { buildMime, cleanEmail, htmlToText, type MimeAttachment } from '../google/mime';
 import { getSettings } from '../settings';
-import { client, getAccount, isDemo, listAccounts, setStatus } from './accounts';
+import { client, getAccount, isDemo, listAccounts, reauthAccount, setStatus } from './accounts';
+import { FULL_MAIL_SCOPE } from '../google/oauth';
 import { enqueue, registerOp, setPermanentFailureHook } from './ops';
 import * as store from './mailStore';
 import { notifyNewMail } from './notify';
@@ -356,8 +357,35 @@ export function trash(accountId: string, ids: string[]): void {
   changed('folders', accountId);
 }
 
+/**
+ * Accounts signed in before 1.0.19 only granted gmail.modify, which can't permanently delete. Ask them to sign in
+ * again once to grant full mailbox access; returns false if they'd rather not (nothing is deleted).
+ */
+async function ensureFullAccess(accountId: string): Promise<boolean> {
+  if (isDemo(accountId) || client(accountId).hasScope(FULL_MAIL_SCOPE)) return true;
+  const opts = {
+    type: 'info' as const,
+    title: 'Davenport',
+    message: 'Sign in again to permanently delete mail',
+    detail:
+      `To permanently delete messages, Davenport needs full access to the mailbox for ${getAccount(accountId).email}. ` +
+      'Sign in again and allow it; you only need to do this once.\n\nUntil then, messages stay in the Bin, and Gmail removes them after 30 days.',
+    buttons: ['Sign in', 'Cancel'],
+    defaultId: 0,
+    cancelId: 1,
+    noLink: true
+  };
+  const win = BrowserWindow.getFocusedWindow();
+  const { response } = win ? await dialog.showMessageBox(win, opts) : await dialog.showMessageBox(opts);
+  if (response !== 0) return false;
+  await reauthAccount(accountId);
+  if (client(accountId).hasScope(FULL_MAIL_SCOPE)) return true;
+  throw new Error('Full mailbox access wasn\'t allowed, so nothing was deleted. Tick every box on Google\'s sign-in page and try again.');
+}
+
 /** Permanently deletes messages (Delete inside the Bin). */
-export function deleteForever(accountId: string, ids: string[]): void {
+export async function deleteForever(accountId: string, ids: string[]): Promise<void> {
+  if (!(await ensureFullAccess(accountId))) return;
   const expanded = settingsExpand(accountId, ids).filter((id) => store.getLabels(accountId, id).includes('TRASH'));
   const target = expanded.length ? expanded : ids;
   store.deleteLocal(accountId, target);
@@ -383,7 +411,8 @@ export function spam(accountId: string, ids: string[], isSpam: boolean): void {
   isSpam ? modify(accountId, expanded, ['SPAM'], ['INBOX']) : modify(accountId, expanded, ['INBOX'], ['SPAM']);
 }
 
-export function emptyFolder(accountId: string, labelId: 'TRASH' | 'SPAM'): void {
+export async function emptyFolder(accountId: string, labelId: 'TRASH' | 'SPAM'): Promise<void> {
+  if (!(await ensureFullAccess(accountId))) return;
   const ids = all<{ message_id: string }>('SELECT message_id FROM message_labels WHERE account_id = ? AND label_id = ?', accountId, labelId).map(
     (r) => r.message_id
   );

@@ -55,7 +55,7 @@ Davenport sets your Chat status (Automatic, Do not disturb, Away, and a status m
 
 | Permission | Why |
 | --- | --- |
-| Read, compose, send and organise Gmail (`gmail.modify`) | Your mail, folders (labels), drafts, sending |
+| Full access to Gmail (`https://mail.google.com/`) | Your mail, folders (labels), drafts, sending, and permanently deleting messages (Delete forever, Empty Bin) |
 | Gmail settings (`gmail.settings.basic`) | Rules as Gmail filters, signatures, automatic replies |
 | Calendar (`calendar`) | Events, invitations, free/busy, Meet links |
 | Contacts, other contacts, directory | Address book, autocomplete, organisation directory |
