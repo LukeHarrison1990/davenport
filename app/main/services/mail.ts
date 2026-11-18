@@ -593,7 +593,9 @@ export async function prepareReply(accountId: string, messageId: string, mode: '
 
 export async function openDraft(accountId: string, messageId: string): Promise<Draft> {
   const m = await getMessage(accountId, messageId);
-  const gmailDraftId = isDemo(accountId) ? undefined : await gmail(accountId).draftIdForMessage(messageId);
+  const gmailDraftId = isDemo(accountId) ? messageId : await gmail(accountId).draftIdForMessage(messageId);
+  // A saved reply: keep it in its conversation. Its References header ends with the message it replies to.
+  const parent = m.references?.trim().split(/\s+/).pop();
   return {
     localId: uid(),
     accountId,
@@ -606,8 +608,10 @@ export async function openDraft(accountId: string, messageId: string): Promise<D
     attachments: m.attachments
       .filter((a) => !a.contentId)
       .map((a) => ({ filename: a.filename, mimeType: a.mimeType, size: a.size, fromMessage: { accountId, messageId, attachmentId: a.id } })),
-    mode: 'new',
-    gmailDraftId
+    mode: parent ? 'reply' : 'new',
+    inReplyTo: parent ? { messageId: m.id, threadId: m.threadId, messageIdHeader: parent, references: m.references } : undefined,
+    gmailDraftId,
+    gmailMessageId: messageId
   };
 }
 
@@ -661,6 +665,12 @@ export function send(d: Draft): { outboxId: string; sendAt: number } {
   const sendAt = d.sendAt && d.sendAt > Date.now() ? d.sendAt : Date.now() + getSettings().undoSendSeconds * 1000;
   const id = uid();
   run("INSERT INTO outbox (id, account_id, draft_json, send_at, status, created) VALUES (?, ?, ?, ?, 'waiting', ?)", id, d.accountId, JSON.stringify(d), sendAt, Date.now());
+  // The saved draft is deleted from Gmail once the message goes; hide its cached copy now so it doesn't linger
+  // in Drafts and in the conversation meanwhile. (Undo send reopens the message, which saves it again.)
+  if (d.gmailMessageId) {
+    store.deleteLocal(d.accountId, [d.gmailMessageId]);
+    changed('mail', d.accountId);
+  }
   changed('outbox', d.accountId);
   changed('folders', d.accountId);
   kickOutbox();
@@ -784,7 +794,7 @@ function demoSend(d: Draft): void {
   });
 }
 
-export async function saveDraft(d: Draft): Promise<{ gmailDraftId?: string }> {
+export async function saveDraft(d: Draft): Promise<{ gmailDraftId?: string; gmailMessageId?: string }> {
   if (isDemo(d.accountId)) {
     const id = d.gmailDraftId ?? 'draft-' + d.localId;
     store.upsertMessage(d.accountId, {
@@ -794,19 +804,22 @@ export async function saveDraft(d: Draft): Promise<{ gmailDraftId?: string }> {
     });
     changed('mail', d.accountId);
     changed('folders', d.accountId);
-    return { gmailDraftId: id };
+    return { gmailDraftId: id, gmailMessageId: id };
   }
   const { mime, threadId } = await draftToMime(d);
   const r = await gmail(d.accountId).saveDraft(mime, threadId, d.gmailDraftId);
   await fetchAndStore(d.accountId, [r.message.id]);
-  // Remove the cached copy of the previous version of this draft.
-  run(
-    "DELETE FROM messages WHERE account_id = ? AND id != ? AND thread_id = ? AND labels LIKE '%\"DRAFT\"%' AND labels NOT LIKE '%\"SENT\"%' AND subject = ?",
-    d.accountId, r.message.id, r.message.threadId, d.subject
-  );
+  // Each save gives the draft a new message id: remove the cached copy of the previous version, by its id when we
+  // know it (the subject may have changed since), otherwise by thread and subject.
+  if (d.gmailMessageId && d.gmailMessageId !== r.message.id) store.deleteLocal(d.accountId, [d.gmailMessageId]);
+  else if (!d.gmailMessageId)
+    run(
+      "DELETE FROM messages WHERE account_id = ? AND id != ? AND thread_id = ? AND labels LIKE '%\"DRAFT\"%' AND labels NOT LIKE '%\"SENT\"%' AND subject = ?",
+      d.accountId, r.message.id, r.message.threadId, d.subject
+    );
   changed('mail', d.accountId);
   changed('folders', d.accountId);
-  return { gmailDraftId: r.id };
+  return { gmailDraftId: r.id, gmailMessageId: r.message.id };
 }
 
 export async function discardDraft(d: Draft): Promise<void> {
@@ -814,9 +827,13 @@ export async function discardDraft(d: Draft): Promise<void> {
   if (isDemo(d.accountId)) {
     store.deleteLocal(d.accountId, [d.gmailDraftId]);
   } else {
-    // Remove exactly this draft's cached copy (not every draft that happens to share its subject).
+    // Remove exactly this draft's cached copy (not every draft that happens to share its subject), straight away.
+    if (d.gmailMessageId) {
+      store.deleteLocal(d.accountId, [d.gmailMessageId]);
+      changed('mail', d.accountId);
+    }
     const g = gmail(d.accountId);
-    const messageId = await g.draftMessageId(d.gmailDraftId).catch(() => undefined);
+    const messageId = d.gmailMessageId ?? (await g.draftMessageId(d.gmailDraftId).catch(() => undefined));
     await g.deleteDraft(d.gmailDraftId).catch(() => undefined);
     if (messageId) store.deleteLocal(d.accountId, [messageId]);
   }

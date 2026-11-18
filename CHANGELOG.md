@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.0.20 — 2026-11-18
+
+**Replying**
+- Your reply's saved draft no longer appears in the conversation above the box you're typing in, so nothing jumps when it autosaves.
+- If a new message arrives in the conversation you're replying to, the reply stays open with everything you've typed. The new message appears collapsed above it, so the page doesn't jump. Before, the reply could close, leaving its draft behind, and the reading pane could even move to a different email.
+- Drafts disappear as soon as you click Send or Discard, instead of hanging around in Drafts and in the conversation until the next sync.
+- Changing a reply's subject no longer leaves an old copy of the draft behind.
+- Continue editing on a saved reply now opens it in the reading pane, still part of its conversation. Before, it opened as a new message and could be sent outside the conversation.
+
+**Tweaks**
+- The heading above a conversation shows its topic without "Re:" or "Fwd:", as Outlook does, so it doesn't change as replies come in.
+
 ## 1.0.19 — 2026-11-17
 
 **Fixes**

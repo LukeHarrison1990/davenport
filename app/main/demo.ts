@@ -1,6 +1,7 @@
 // Sample data for the demo account, so every screen can be explored before connecting Google.
 import type { Addr, CalEvent, ChatMessage, ChatSpace, Contact, Task } from '../shared/types';
-import { run, tx } from './db';
+import { get, run, tx } from './db';
+import { changed } from './events';
 import { createDemoAccount } from './services/accounts';
 import { upsertMessage } from './services/mailStore';
 
@@ -238,4 +239,25 @@ function seedChat(accountId: string, todayAt: (h: number, m: number) => number, 
     for (const s of spaces) run('INSERT OR REPLACE INTO chat_spaces (account_id, id, json, last_active) VALUES (?, ?, ?, ?)', accountId, s.id, JSON.stringify(s), s.lastActive);
     for (const x of msgs) run('INSERT OR REPLACE INTO chat_messages (account_id, space_id, id, create_time, thread_id, json) VALUES (?, ?, ?, ?, ?, ?)', accountId, x.spaceId, x.id, x.createTime, x.threadId ?? null, JSON.stringify(x));
   });
+}
+
+/** Demo account only: a new reply arrives in a conversation, as if from Gmail (used by the interface checks). */
+export function demoReceive(threadId: string): string {
+  const accountId = 'demo';
+  const last = get<{ subject: string }>(
+    "SELECT subject FROM messages WHERE account_id = ? AND thread_id = ? AND labels NOT LIKE '%\"DRAFT\"%' ORDER BY date DESC LIMIT 1",
+    accountId, threadId
+  );
+  if (!last) throw new Error('No such conversation in the demo account.');
+  const id = 'demo-in-' + Date.now();
+  const from = P.priya;
+  const html = '<p>One more thing: can we confirm by Friday?</p>';
+  upsertMessage(accountId, {
+    id, threadId, labelIds: ['INBOX', 'UNREAD'], snippet: 'One more thing: can we confirm by Friday?', date: Date.now(), size: html.length,
+    from, to: [ME], cc: [], bcc: [], replyTo: [], subject: last.subject.startsWith('Re:') ? last.subject : 'Re: ' + last.subject,
+    messageIdHeader: `<${id}@northfield.example>`, hasAttachments: false, html, text: 'One more thing: can we confirm by Friday?', attachments: [], full: true
+  });
+  changed('mail', accountId);
+  changed('folders', accountId);
+  return id;
 }

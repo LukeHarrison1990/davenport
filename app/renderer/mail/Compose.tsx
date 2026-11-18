@@ -64,8 +64,8 @@ export function Compose({ initial, inline, onClose }: { initial: Draft; inline?:
     setSaving('saving');
     try {
       const r = await call('mail.saveDraft', latest.current);
-      setD((x) => ({ ...x, gmailDraftId: r.gmailDraftId }));
-      latest.current = { ...latest.current, gmailDraftId: r.gmailDraftId };
+      setD((x) => ({ ...x, gmailDraftId: r.gmailDraftId, gmailMessageId: r.gmailMessageId }));
+      latest.current = { ...latest.current, gmailDraftId: r.gmailDraftId, gmailMessageId: r.gmailMessageId };
       dirty.current = false;
       setSaving('saved');
       if (!quiet) notify('Draft saved.');
@@ -84,6 +84,7 @@ export function Compose({ initial, inline, onClose }: { initial: Draft; inline?:
     try {
       await saving$.current?.catch(() => undefined);
       draft.gmailDraftId = latest.current.gmailDraftId;
+      draft.gmailMessageId = latest.current.gmailMessageId;
       await call('mail.send', draft);
       finished.current = true;
       if (draft.gmailDraftId && sendAt) await call('mail.discardDraft', draft).catch(() => undefined);

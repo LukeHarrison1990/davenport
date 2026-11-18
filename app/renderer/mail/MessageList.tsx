@@ -66,11 +66,18 @@ export function MessageList({ folders, position, size }: { folders: Folder[]; po
   const lastIndex = useRef(0);
   useEffect(() => {
     if (!list.length) return;
-    const still = selected.filter((s) => list.some((m) => m.accountId === s.accountId && m.id === s.id));
+    // A row stands for its whole conversation, so when a newer message arrives the row's id changes: follow it to
+    // the same conversation rather than jumping to whatever now sits where the old row was.
+    const still = selected.flatMap((s) => {
+      if (list.some((m) => m.accountId === s.accountId && m.id === s.id)) return [s];
+      const same = settings.conversationView && list.find((m) => m.accountId === s.accountId && m.threadId === s.threadId);
+      return same ? [{ accountId: same.accountId, id: same.id, threadId: same.threadId }] : [];
+    });
+    const changedIds = still.some((s, i) => s.id !== selected[i]?.id);
     if (selected.length && still.length === 0) {
       const next = list[Math.min(lastIndex.current, list.length - 1)];
       if (next) select(toSel([next]));
-    } else if (still.length !== selected.length) select(still);
+    } else if (still.length !== selected.length || changedIds) select(still);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [list]);
 

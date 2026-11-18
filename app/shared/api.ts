@@ -63,9 +63,10 @@ export interface Api {
   'mail.cancelSend'(outboxId: string): Draft | null;
   'mail.sendNow'(outboxId: string): void;
   'mail.outbox'(): OutboxItem[];
-  'mail.saveDraft'(draft: Draft): { gmailDraftId?: string };
+  'mail.saveDraft'(draft: Draft): { gmailDraftId?: string; gmailMessageId?: string };
   'mail.discardDraft'(draft: Draft): void;
   'mail.openDraft'(accountId: string, messageId: string): Draft;
+  'demo.receive'(threadId: string): string;
   'mail.prepareReply'(accountId: string, messageId: string, mode: 'reply' | 'replyAll' | 'forward'): Draft;
   'mail.newDraft'(accountId: string, to?: string): Draft;
   'mail.openAttachment'(accountId: string, messageId: string, attachmentId: string, filename: string): void;

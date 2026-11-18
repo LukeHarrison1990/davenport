@@ -127,6 +127,8 @@ export interface Draft {
   inReplyTo?: { messageId: string; threadId: string; messageIdHeader?: string; references?: string };
   sendAt?: number;
   gmailDraftId?: string;
+  /** The message id of the draft's saved copy in Gmail, so the cached copy can be replaced or hidden exactly. */
+  gmailMessageId?: string;
   importance?: 'normal' | 'high';
 }
 

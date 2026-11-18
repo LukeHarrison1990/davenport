@@ -17,7 +17,7 @@ import * as people from './services/people';
 import * as tasks from './services/tasks';
 import * as chat from './services/chat';
 import * as ooo from './services/outOfOffice';
-import { seedDemo } from './demo';
+import { demoReceive, seedDemo } from './demo';
 import { manualSync, syncAccount, syncProgress } from './sync';
 import { openChildWindow, paramsFor, setTitleBarColour } from './windows';
 import { updateBadge } from './tray';
@@ -256,6 +256,7 @@ const impl: Impl = {
   'mail.saveDraft': (_c, d) => mail.saveDraft(d),
   'mail.discardDraft': (_c, d) => mail.discardDraft(d),
   'mail.openDraft': (_c, a, id) => mail.openDraft(a, id),
+  'demo.receive': (_c, threadId) => demoReceive(threadId),
   'mail.prepareReply': (_c, a, id, mode) => mail.prepareReply(a, id, mode),
   'mail.newDraft': (_c, a, to) => mail.newDraft(a, to),
   'mail.openAttachment': (_c, a, m, att, f) => mail.openAttachment(a, m, att, f),

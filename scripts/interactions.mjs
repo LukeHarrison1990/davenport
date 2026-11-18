@@ -257,6 +257,43 @@ await check('right-clicking a message in the reading pane shows an Outlook-style
   if (await win.getByRole('menuitem', { name: /^Reply all/ }).count()) throw new Error('menu stayed open');
 });
 
+await check('replying: the saved draft stays out of the conversation, and a new message in it keeps the reply open', async () => {
+  await api('settings.set', { undoSendSeconds: 3 });
+  await win.keyboard.press('Control+1');
+  const row = win.locator('#message-list .row').nth(1);
+  await row.click();
+  await win.waitForTimeout(600);
+  const subject = (await win.locator('.reading h1').innerText()).trim();
+  const thread = (await api('mail.list', { accountId: 'demo', folder: { type: 'label', id: 'INBOX' } })).find((m) => subject.endsWith(m.subject.replace(/^(Re|Fwd?):\s*/i, '')));
+  if (!thread) throw new Error('could not find the conversation for ' + subject);
+  const before = await win.locator('.reading .msg-area').count();
+  await win.locator('.quick-reply').getByRole('button', { name: /^Reply$/ }).click();
+  const editor = win.locator('.compose.inline .editor');
+  await editor.waitFor();
+  await editor.click();
+  await win.keyboard.type('Draft that should not appear above me.');
+  await win.keyboard.press('Control+s');
+  await win.locator('.compose.inline .hint-text', { hasText: 'Draft saved' }).waitFor();
+  await win.waitForTimeout(400);
+  if ((await win.locator('.reading .msg-area').count()) !== before) throw new Error('the saved draft appeared in the conversation');
+  // A reply arrives in the same conversation while we're writing.
+  await api('demo.receive', thread.threadId);
+  await win.waitForTimeout(800);
+  if ((await win.locator('.compose.inline').count()) !== 1) throw new Error('the reply being written closed');
+  if (!(await editor.innerText()).includes('should not appear')) throw new Error('the reply lost its text');
+  if ((await win.locator('.reading h1').innerText()).trim() !== subject) throw new Error('the reading pane moved to another conversation: ' + (await win.locator('.reading h1').innerText()));
+  await win.keyboard.type(' Edited.');
+  await win.locator('.compose.inline #c-subject').fill('Changed subject');
+  await win.keyboard.press('Control+s');
+  await win.waitForTimeout(600);
+  const drafts = async () => (await api('mail.list', { accountId: 'demo', folder: { type: 'label', id: 'DRAFT' } })).filter((m) => m.threadId === thread.threadId);
+  if ((await drafts()).length !== 1) throw new Error('expected one draft, found ' + (await drafts()).length);
+  await win.locator('.compose.inline').getByRole('button', { name: /^Send$/ }).click();
+  await win.waitForTimeout(500);
+  if ((await drafts()).length !== 0) throw new Error('the draft was still in Drafts after sending');
+  await win.waitForTimeout(3500);
+});
+
 await check('New mail split button offers other items', async () => {
   await win.locator('.split-more').first().click();
   await win.getByRole('menuitem', { name: 'Event' }).waitFor();

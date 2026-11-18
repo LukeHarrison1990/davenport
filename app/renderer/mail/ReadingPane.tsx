@@ -16,7 +16,10 @@ export function ReadingPane({ folders, standalone }: { folders: Folder[]; standa
   const target = standalone ?? (selected.length === 1 ? selected[0] : null);
   const [inlineDraft, setInlineDraft] = useState<Draft | null>(null);
 
-  useEffect(() => setInlineDraft(null), [target?.accountId, target?.id]);
+  // An open reply stays open while the conversation it belongs to is shown, even when a new message arrives in it
+  // (the list then points at the newer message). Only moving to a different conversation closes it.
+  const threadKey = target ? target.accountId + (settings.conversationView ? target.threadId : target.id) : '';
+  useEffect(() => setInlineDraft(null), [threadKey]);
 
   const [thread, , loading] = useLive<MessageDetail[] | null>(
     async () => {
@@ -47,7 +50,9 @@ export function ReadingPane({ folders, standalone }: { folders: Folder[]; standa
     return <div className="reading">{loading && <div className="empty">Loading…</div>}</div>;
   }
 
-  const latest = thread[thread.length - 1];
+  // While replying, the reply's own saved copy (a Gmail draft in the same conversation) isn't shown above the editor.
+  const shown = inlineDraft ? thread.filter((m) => !m.labelIds.includes('DRAFT')) : thread;
+  const latest = shown[shown.length - 1] ?? thread[thread.length - 1];
   const sel: Sel = [{ accountId: latest.accountId, id: latest.id, threadId: latest.threadId }];
   const accFolders = folders.filter((f) => f.accountId === latest.accountId);
   const flagged = thread.find((m) => m.flagged);
@@ -72,7 +77,7 @@ export function ReadingPane({ folders, standalone }: { folders: Folder[]; standa
             <button onClick={() => call('mail.unsnooze', latest.accountId, [latest.id])}>Unsnooze</button>
           </div>
         )}
-        <h1>{latest.subject}</h1>
+        <h1>{topic(latest.subject)}</h1>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 14 }}>
           {latest.categories.map((c) => (
             <span key={c.name} className="chip cat" style={{ ['--c' as string]: c.color, padding: '2px 8px', fontSize: 12 }}>{c.name}</span>
@@ -85,8 +90,8 @@ export function ReadingPane({ folders, standalone }: { folders: Folder[]; standa
           {latest.important && <span className="chip" style={{ background: 'var(--brass-soft)', color: 'var(--brass-ink)', padding: '2px 8px', fontSize: 12 }}>Important</span>}
         </div>
 
-        {thread.map((m, i) => (
-          <ThreadMessage key={m.id} m={m} expandedByDefault={i === thread.length - 1 || m.unread || thread.length <= 2} single={thread.length === 1}
+        {shown.map((m, i) => (
+          <ThreadMessage key={m.id} m={m} expandedByDefault={!inlineDraft && (i === shown.length - 1 || m.unread || shown.length <= 2)} single={shown.length === 1}
             onReply={(mode) => void respond([{ accountId: m.accountId, id: m.id, threadId: m.threadId }], mode, (d) => setInlineDraft(d))}
             onMenu={(e) => openMenu(rowMenu(m, [{ accountId: m.accountId, id: m.id, threadId: m.threadId }], accFolders, folderId), e.currentTarget)}
             onContext={(c) => openMenu(readingMenu(m, c, accFolders, folderId, !standalone), { x: c.x, y: c.y })}
@@ -114,9 +119,9 @@ export function ReadingPane({ folders, standalone }: { folders: Folder[]; standa
             </div>
           )
         )}
-        {latest.labelIds.includes('DRAFT') && (
+        {!inlineDraft && latest.labelIds.includes('DRAFT') && (
           <div className="quick-reply">
-            <button className="btn primary" onClick={() => call('mail.openDraft', latest.accountId, latest.id).then((d) => call('app.openWindow', 'compose', { draft: JSON.stringify(d) })).catch(fail)}>
+            <button className="btn primary" onClick={() => call('mail.openDraft', latest.accountId, latest.id).then((d) => (d.inReplyTo ? setInlineDraft(d) : call('app.openWindow', 'compose', { draft: JSON.stringify(d) }))).catch(fail)}>
               <Icon name="edit" /> Continue editing
             </button>
           </div>
@@ -293,6 +298,11 @@ function readingMenu(m: MessageDetail, c: BodyContext, folders: Folder[], folder
   items.push({ label: 'Copy sender’s address', icon: 'person', onClick: () => copy(m.from.email, 'Email address') });
   items.push({ sep: true }, ...rowMenu(m, sel, folders, folderId));
   return items;
+}
+
+/** The conversation's topic, as Outlook shows it: the subject without Re:/Fwd: prefixes, so it doesn't change as replies arrive. */
+function topic(subject: string): string {
+  return subject.replace(/^(\s*(re|fwd?|aw|wg|sv|vs|tr)\s*(\[\d+\])?\s*:\s*)+/i, '') || subject;
 }
 
 export function addrsTitle(list: { name?: string; email: string }[]): string {
