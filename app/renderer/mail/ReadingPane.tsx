@@ -9,6 +9,7 @@ import { fail, notify, useApp } from '../state';
 import { addrFull, addrName, bytes, cx, fileKind, fullDate, listTime } from '../util';
 import { createEventFrom, flag, flagMenu, newMail, respond, rowMenu, type Sel } from './actions';
 import { Compose } from './Compose';
+import { InviteCard } from './InviteCard';
 import { MessageBody, type BodyContext } from './MessageBody';
 
 export function ReadingPane({ folders, standalone }: { folders: Folder[]; standalone?: { accountId: string; id: string; threadId: string } }) {
@@ -141,7 +142,13 @@ function ThreadMessage({ m, expandedByDefault, single, onReply, onMenu, onContex
     setAllowRemote(m.remoteImagesAllowed ?? !settings.blockRemoteImages);
   }, [m.id, m.remoteImagesAllowed, settings.blockRemoteImages]);
 
-  const attachments = m.attachments.filter((a) => !a.contentId);
+  // A meeting invitation shows as a card with Accept / Tentative / Decline; its .ics file is then hidden.
+  const [inviteShown, setInviteShown] = useState(false);
+  const isIcs = (a: { filename: string; mimeType: string }) => /\.ics$/i.test(a.filename) || /^(text\/calendar|application\/ics)$/i.test(a.mimeType);
+  const mayBeInvite = m.attachments.some((a) => a.role === 'invite' || (!a.contentId && isIcs(a)));
+  const amp = m.attachments.some((a) => a.role === 'amp');
+  const form = emailForm(m.html);
+  const attachments = m.attachments.filter((a) => !a.contentId && !a.role && !(inviteShown && isIcs(a)));
 
   const head = (
     <div className="msg-head" style={single ? undefined : { borderBottom: open ? '1px solid var(--border-soft)' : 0, padding: '12px 14px' }}>
@@ -181,6 +188,20 @@ function ThreadMessage({ m, expandedByDefault, single, onReply, onMenu, onContex
             setAllowRemote(true);
             void call('mail.loadRemoteImages', m.accountId, m.id, true);
           }}>Always from {m.from.email}</button>
+        </div>
+      )}
+      {mayBeInvite && <InviteCard m={m} onFound={setInviteShown} />}
+      {form?.url ? (
+        <div className="banner info" style={{ marginTop: 12 }}>
+          <Icon name="info" />
+          <span>This email contains a Google Form. For safety, forms aren't filled in inside emails; you can fill it in in your browser instead.</span>
+          <button onClick={() => call('app.openExternal', form.url!).catch(fail)}>Open form</button>
+        </div>
+      ) : (amp || form) && (
+        <div className="banner info" style={{ marginTop: 12 }}>
+          <Icon name="info" />
+          <span>This email has interactive parts (such as a form or a poll) that only work in Gmail on the web.</span>
+          <button onClick={() => call('app.openExternal', gmailLink(m)).catch(fail)}>Open in Gmail</button>
         </div>
       )}
       {attachments.length > 0 && (
@@ -299,6 +320,20 @@ function readingMenu(m: MessageDetail, c: BodyContext, folders: Folder[], folder
   items.push({ sep: true }, ...rowMenu(m, sel, folders, folderId));
   return items;
 }
+
+/** A form inside an email (not shown, for safety). For a Google Form, the address to fill it in in a browser. */
+function emailForm(html: string | undefined): { url?: string } | null {
+  if (!html || !/<form[\s>]/i.test(html)) return null;
+  const action = html.match(/<form[^>]+action=["'](https:\/\/docs\.google\.com\/forms\/[^"']+)["']/i)?.[1];
+  if (!action) return {};
+  return { url: action.replace(/&amp;/g, '&').replace(/\/formResponse(\?.*)?$/, '/viewform') };
+}
+
+/** The message in Gmail on the web, signed in as the account it belongs to. */
+const gmailLink = (m: MessageDetail) => {
+  const email = useApp.getState().accounts.find((a) => a.id === m.accountId)?.email ?? '0';
+  return `https://mail.google.com/mail/u/${encodeURIComponent(email)}/#all/${m.threadId}`;
+};
 
 /** The conversation's topic, as Outlook shows it: the subject without Re:/Fwd: prefixes, so it doesn't change as replies arrive. */
 function topic(subject: string): string {

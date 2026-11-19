@@ -70,6 +70,8 @@ export interface Attachment {
   mimeType: string;
   size: number;
   contentId?: string;
+  /** Not a file the user sees: 'invite' is a meeting invitation part, 'amp' marks interactive Gmail-only content. */
+  role?: 'invite' | 'amp';
 }
 
 export interface MessageDetail extends MessageSummary {
@@ -238,6 +240,30 @@ export interface CalendarInfo {
 
 export type EventType = 'default' | 'focusTime' | 'outOfOffice' | 'workingLocation';
 export type Response = 'needsAction' | 'accepted' | 'tentative' | 'declined';
+export type InviteResponse = 'accepted' | 'tentative' | 'declined';
+
+/** A meeting invitation (or cancellation, or someone's reply) found in an email. */
+export interface Invite {
+  method: 'REQUEST' | 'CANCEL' | 'REPLY' | 'PUBLISH';
+  title: string;
+  start: number;
+  end: number;
+  allDay: boolean;
+  location?: string;
+  meetingUrl?: string;
+  recurring: boolean;
+  organizer?: Addr;
+  iAmOrganizer: boolean;
+  attendeeCount: number;
+  /** Sent by Google Calendar (answered through Google Calendar) rather than Outlook or another system. */
+  fromGoogle: boolean;
+  inCalendar: boolean;
+  myResponse?: Response;
+  /** For a REPLY: who responded, and how. */
+  reply?: { email: string; name?: string; response: Response };
+  /** Titles of other events at the same time. */
+  conflicts: string[];
+}
 
 export interface Attendee {
   email: string;

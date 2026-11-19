@@ -597,3 +597,20 @@ textarea.input { min-height: 90px; resize: vertical; font-family: var(--font); }
 .licence-text p { margin: 0 0 8px; }
 .licence-text p:last-child { margin-bottom: 0; }
 .about-links { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* Meeting invitations */
+.invite-card { margin-top: 12px; border: 1px solid var(--border); border-left: 4px solid var(--accent); border-radius: 6px; background: var(--surface); }
+.invite-card.cancelled { border-left-color: var(--danger, #C42B1C); }
+.invite-card.cancelled .invite-title { text-decoration: line-through; text-decoration-thickness: 1px; }
+.invite-main { display: flex; gap: 12px; padding: 12px 14px; align-items: flex-start; }
+.invite-icon { color: var(--accent); padding-top: 2px; }
+.invite-info { flex: 1; min-width: 0; }
+.invite-title { font-weight: 600; font-size: 15px; margin-bottom: 2px; }
+.invite-line { font-size: 13px; line-height: 1.5; }
+.invite-line.muted { color: var(--muted); }
+.invite-line.warn { color: var(--brass-ink); font-weight: 600; }
+.invite-side { display: flex; flex-direction: column; gap: 6px; align-items: stretch; }
+.invite-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding: 10px 14px; border-top: 1px solid var(--border-soft); }
+.invite-buttons { display: flex; gap: 6px; }
+.invite-notify { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
+.invite-status { font-size: 13px; color: var(--muted); }

@@ -101,7 +101,16 @@ export function parseMessage(m: GMessage): ParsedMessage {
     const ph = headerMap(p.headers);
     const disp = ph.get('content-disposition') ?? '';
     const cid = ph.get('content-id')?.replace(/[<>]/g, '');
-    if (p.body?.attachmentId || (p.filename && p.filename.length)) {
+    const isCalendar = /^(text\/calendar|application\/ics)$/i.test(p.mimeType) || /\.ics$/i.test(p.filename ?? '');
+    if (isCalendar && !(p.filename && p.filename.length)) {
+      // An invitation part with no file name (how Google Calendar and Outlook send them): not shown as an
+      // attachment, but kept so the reading pane can offer Accept / Tentative / Decline.
+      attachments.push({ id: p.body?.attachmentId ?? 'part:' + p.partId, filename: 'invite.ics', mimeType: 'text/calendar', size: p.body?.size ?? 0, role: 'invite' });
+      if (p.body?.data && !p.body.attachmentId) (attachments[attachments.length - 1] as Attachment & { inlineData?: string }).inlineData = p.body.data;
+    } else if (p.mimeType === 'text/x-amp-html') {
+      // Interactive email (AMP): only Gmail on the web can run it. Noted so the reading pane can say so.
+      attachments.push({ id: 'part:' + p.partId, filename: 'amp', mimeType: p.mimeType, size: 0, role: 'amp' });
+    } else if (p.body?.attachmentId || (p.filename && p.filename.length)) {
       attachments.push({
         id: p.body?.attachmentId ?? 'part:' + p.partId,
         filename: decodeHeader(p.filename || 'attachment'),
@@ -123,7 +132,7 @@ export function parseMessage(m: GMessage): ParsedMessage {
   walk(m.payload);
 
   const fromList = parseAddressList(h.get('from'));
-  const realAttachments = attachments.filter((a) => !a.contentId);
+  const realAttachments = attachments.filter((a) => !a.contentId && !a.role);
   return {
     id: m.id,
     threadId: m.threadId,

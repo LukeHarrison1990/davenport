@@ -3,6 +3,7 @@ import type { Addr, CalEvent, ChatMessage, ChatSpace, Contact, Task } from '../s
 import { get, run, tx } from './db';
 import { changed } from './events';
 import { createDemoAccount } from './services/accounts';
+import { demoEventId } from './services/ics';
 import { upsertMessage } from './services/mailStore';
 
 const ME: Addr = { name: 'Alex Morgan', email: 'alex@northfield.example' };
@@ -28,6 +29,37 @@ const LABELS: [string, string, string | null, number][] = [
   ['Label_website', 'Projects/Website relaunch', null, 0]
 ];
 
+const SUPPLIER_UID = 'supplier-call-demo@google.com';
+
+/** A demo invitation part, carried inline as Gmail does for small calendar parts. */
+function invitePart(ics: string) {
+  return { filename: 'invite.ics', mimeType: 'text/calendar', size: ics.length, role: 'invite' as const, inlineData: Buffer.from(ics).toString('base64url') };
+}
+
+function icsFor(o: { method: string; uid: string; title: string; start: number; end: number; organizer: Addr; location?: string; meet?: string; teams?: string; windowsZone?: boolean }): string {
+  const utc = (ms: number) => new Date(ms).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+  // Outlook writes local times with its own zone names; London wall-clock time is used for the demo.
+  const london = (ms: number) => {
+    const p = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }).formatToParts(new Date(ms));
+    const v = (t: string) => p.find((x) => x.type === t)!.value;
+    return `${v('year')}${v('month')}${v('day')}T${v('hour')}${v('minute')}${v('second')}`;
+  };
+  const tz = o.windowsZone
+    ? ['BEGIN:VTIMEZONE', 'TZID:GMT Standard Time', 'BEGIN:STANDARD', 'DTSTART:16010101T020000', 'TZOFFSETFROM:+0100', 'TZOFFSETTO:+0000', 'RRULE:FREQ=YEARLY;INTERVAL=1;BYDAY=-1SU;BYMONTH=10', 'END:STANDARD',
+       'BEGIN:DAYLIGHT', 'DTSTART:16010101T010000', 'TZOFFSETFROM:+0000', 'TZOFFSETTO:+0100', 'RRULE:FREQ=YEARLY;INTERVAL=1;BYDAY=-1SU;BYMONTH=3', 'END:DAYLIGHT', 'END:VTIMEZONE']
+    : [];
+  const dt = (name: string, ms: number) => (o.windowsZone ? `${name};TZID=GMT Standard Time:${london(ms)}` : `${name}:${utc(ms)}`);
+  return [
+    'BEGIN:VCALENDAR', o.windowsZone ? 'PRODID:Microsoft Exchange Server 2010' : 'PRODID:-//Google Inc//Google Calendar 70.9054//EN', 'VERSION:2.0', `METHOD:${o.method}`, ...tz,
+    'BEGIN:VEVENT', dt('DTSTART', o.start), dt('DTEND', o.end), `DTSTAMP:${utc(Date.now())}`,
+    `ORGANIZER;CN=${o.organizer.name}:mailto:${o.organizer.email}`, `UID:${o.uid}`,
+    `ATTENDEE;CUTYPE=INDIVIDUAL;ROLE=REQ-PARTICIPANT;PARTSTAT=ACCEPTED;CN=${o.organizer.name}:mailto:${o.organizer.email}`,
+    `ATTENDEE;CUTYPE=INDIVIDUAL;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE;CN=${ME.name}:mailto:${ME.email}`,
+    `SUMMARY:${o.title}`, ...(o.location ? [`LOCATION:${o.location}`] : []), ...(o.teams ? [`X-MICROSOFT-SKYPETEAMSMEETINGURL:${o.teams}`] : []),
+    ...(o.meet ? [`DESCRIPTION:Join with Google Meet: ${o.meet}`] : []), 'SEQUENCE:0', 'STATUS:CONFIRMED', 'END:VEVENT', 'END:VCALENDAR', ''
+  ].join('\r\n');
+}
+
 export function seedDemo(): string {
   const accountId = createDemoAccount();
   const now = new Date();
@@ -48,14 +80,14 @@ export function seedDemo(): string {
 
     let n = 0;
     const msg = (o: {
-      from: Addr; to?: Addr[]; cc?: Addr[]; subject: string; html: string; date: number; labels: string[]; attachments?: { filename: string; mimeType: string; size: number }[]; thread?: string;
+      from: Addr; to?: Addr[]; cc?: Addr[]; subject: string; html: string; date: number; labels: string[]; attachments?: { filename: string; mimeType: string; size: number; role?: 'invite'; inlineData?: string }[]; thread?: string;
     }) => {
       const id = 'demo-' + ++n;
       const text = o.html.replace(/<br\s*\/?>/g, '\n').replace(/<\/p>/g, '\n\n').replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').trim();
       upsertMessage(accountId, {
         id, threadId: o.thread ?? id, labelIds: o.labels, snippet: text.replace(/\s+/g, ' ').slice(0, 140), date: o.date, size: o.html.length,
         from: o.from, to: o.to ?? [ME], cc: o.cc ?? [], bcc: [], replyTo: [], subject: o.subject, messageIdHeader: `<${id}@northfield.example>`,
-        hasAttachments: !!o.attachments?.length, html: `<div style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;line-height:1.55">${o.html}</div>`, text,
+        hasAttachments: !!o.attachments?.some((a) => !a.role), html: `<div style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;line-height:1.55">${o.html}</div>`, text,
         attachments: (o.attachments ?? []).map((a, i) => ({ id: 'att' + i, ...a })), full: true
       });
       return id;
@@ -78,8 +110,22 @@ export function seedDemo(): string {
       html: '<p>Tom, can we look at moving the soft launch? Marketing would like a little more time on the pricing page.</p><p>Alex</p>' });
     msg({ from: P.tom, subject: 'Re: Website relaunch timeline', date: todayAt(9, 15), labels: ['INBOX', 'UNREAD', 'Label_projects', 'Label_website', 'CATEGORY_PERSONAL'], thread: webThread,
       html: '<p>Agree on moving the soft launch to the 10th — can we confirm the DNS change window with IT before then?</p><p>I have put the checklist in the shared drive.</p><p>Tom</p>' });
+    const dow = new Date(at(0, 12)).getDay();
+    const mon = dow === 0 ? -6 : 1 - dow;
     msg({ from: P.cal, subject: 'Invitation: Supplier call', date: todayAt(8, 50), labels: ['INBOX', 'UNREAD', 'CATEGORY_UPDATES'],
-      html: `<p><b>Supplier call</b></p><p>Lena Okafor has invited you to this event.</p><p>Join with Google Meet: meet.google.com/abc-defg-hij</p>` });
+      html: `<p><b>Supplier call</b></p><p>Lena Okafor has invited you to this event.</p><p>Join with Google Meet: meet.google.com/abc-defg-hij</p>`,
+      attachments: [invitePart(icsFor({ method: 'REQUEST', uid: SUPPLIER_UID, title: 'Supplier call', start: at(mon + 3, 14), end: at(mon + 3, 15), organizer: P.lena,
+        meet: 'https://meet.google.com/abc-defg-hij' }))] });
+    // A Google Form sent in an email.
+    msg({ from: { name: 'Northfield HR (via Google Forms)', email: 'forms-receipts-noreply@google.com' }, subject: 'Staff wellbeing survey', date: at(-3, 14, 5),
+      labels: ['INBOX', 'CATEGORY_UPDATES'],
+      html: `<p>I've invited you to fill in a form:</p><form action="https://docs.google.com/forms/d/e/1FAIpQLSdemo/formResponse" method="POST"><p><b>How are you finding hybrid working?</b></p><input type="text" name="entry.1"><input type="submit" value="Submit"></form><p>Having trouble? Fill it in on Google Forms.</p>` });
+    // An Outlook (Microsoft 365) invitation: Windows time zone name, Teams link, no copy in Google Calendar yet.
+    const marcus = { name: 'Marcus Webb', email: 'marcus.webb@acme-corp.example' };
+    msg({ from: marcus, subject: 'Acme quarterly review', date: todayAt(7, 40), labels: ['INBOX', 'UNREAD', 'Label_acme', 'Label_clients', 'CATEGORY_PERSONAL'],
+      html: `<p>Hi Alex, here's the invite for our quarterly review. Agenda to follow.</p><p>Marcus</p><p>Microsoft Teams meeting<br>Join: https://teams.microsoft.com/l/meetup-join/19%3ameeting_demo</p>`,
+      attachments: [invitePart(icsFor({ method: 'REQUEST', uid: '040000008200E00074C5B7101A82E00800000000DEM0ACME', title: 'Acme quarterly review', start: at(mon + 8, 10), end: at(mon + 8, 11),
+        organizer: marcus, location: 'Microsoft Teams Meeting', teams: 'https://teams.microsoft.com/l/meetup-join/19%3ameeting_demo', windowsZone: true }))] });
     msg({ from: P.lena, subject: 'Contract draft v3 for Acme', date: todayAt(8, 12), labels: ['INBOX', 'Label_acme', 'Label_clients', 'CATEGORY_PERSONAL'],
       html: '<p>Hi Alex,</p><p>Tracked changes are on clauses 4 and 9 only. Happy to talk it through on Thursday if that helps.</p><p>Best wishes,<br>Lena</p>',
       attachments: [{ filename: 'Acme-contract-v3.docx', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', size: 48128 }] });
@@ -133,7 +179,7 @@ function seedCalendar(accountId: string, at: (d: number, h: number, m?: number) 
   evs.push(ev(mon + 2, 14, 0, 14, 30, '1:1 with Priya', { location: 'Room 2.04', color: '#9A7740',
     attendees: [{ email: P.priya.email, name: P.priya.name, response: 'accepted' }, { email: ME.email, response: 'accepted', self: true }, { email: 'room-204@resource.calendar.google.com', name: 'Room 2.04', response: 'accepted', resource: true }] }));
   evs.push(ev(mon + 2, 16, 0, 17, 0, 'Focus time', { eventType: 'focusTime', autoDecline: true }));
-  evs.push(ev(mon + 3, 14, 0, 15, 0, 'Supplier call', { meetUrl: 'https://meet.google.com/abc-defg-hij', organizer: P.lena, canEdit: false, myResponse: 'needsAction',
+  evs.push(ev(mon + 3, 14, 0, 15, 0, 'Supplier call', { id: demoEventId(SUPPLIER_UID), meetUrl: 'https://meet.google.com/abc-defg-hij', organizer: P.lena, canEdit: false, myResponse: 'needsAction',
     attendees: [{ email: P.lena.email, name: P.lena.name, response: 'accepted', organizer: true }, { email: ME.email, name: ME.name, response: 'needsAction', self: true }] }));
   evs.push(ev(mon + 4, 0, 0, 0, 0, 'Out of office', { allDay: true, start: at(mon + 4, 0), end: at(mon + 5, 0), eventType: 'outOfOffice', autoDecline: true, description: 'Annual leave' }));
   const wl: [number, string][] = [[mon, 'Office'], [mon + 1, 'Home'], [mon + 2, 'Office'], [mon + 3, 'Office']];

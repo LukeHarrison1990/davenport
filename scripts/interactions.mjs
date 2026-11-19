@@ -294,6 +294,36 @@ await check('replying: the saved draft stays out of the conversation, and a new 
   await win.waitForTimeout(3500);
 });
 
+await check('meeting invitations show Accept / Tentative / Decline and update the calendar', async () => {
+  await win.keyboard.press('Control+1');
+  await win.locator('#message-list .row', { hasText: 'Acme quarterly review' }).first().click();
+  const card = win.locator('.invite-card');
+  await card.waitFor();
+  for (const t of ['Acme quarterly review', 'Microsoft Teams Meeting', 'Organiser: Marcus Webb']) await card.getByText(t).first().waitFor();
+  await card.getByRole('button', { name: /Join/ }).waitFor();
+  if (await win.locator('.reading .attachment', { hasText: 'invite.ics' }).count()) throw new Error('the .ics file is still shown');
+  await card.getByRole('button', { name: /Accept/ }).click();
+  await card.getByRole('button', { name: /Accept/, pressed: true }).waitFor();
+  await card.getByText('You accepted.').waitFor();
+  const evs = await api('calendar.events', Date.now() - 864e5, Date.now() + 30 * 864e5);
+  const added = evs.find((e) => e.title === 'Acme quarterly review');
+  if (!added || added.myResponse !== 'accepted') throw new Error('not added to the calendar as accepted');
+  // A Google Calendar invitation that is already in the calendar: declining updates that event.
+  await win.getByRole('tab', { name: 'Other' }).click();
+  await win.locator('#message-list .row', { hasText: 'Invitation: Supplier call' }).first().click();
+  await card.getByText('Supplier call', { exact: true }).waitFor();
+  await card.getByRole('button', { name: /Decline/ }).click();
+  await card.getByText('You declined.').waitFor();
+  const supplier = (await api('calendar.events', Date.now() - 14 * 864e5, Date.now() + 30 * 864e5)).filter((e) => e.title === 'Supplier call');
+  if (supplier.length !== 1 || supplier[0].myResponse !== 'declined') throw new Error('Supplier call: ' + JSON.stringify(supplier.map((e) => e.myResponse)));
+  await win.screenshot({ path: path.join(out, 'invite-card.png') });
+  // A Google Form in an email: not filled in inside the email, but offered in the browser.
+  await win.locator('#message-list .row', { hasText: 'Staff wellbeing survey' }).first().click();
+  await win.getByText('This email contains a Google Form').waitFor();
+  await win.locator('.banner').getByRole('button', { name: 'Open form' }).waitFor();
+  await win.getByRole('tab', { name: 'Primary' }).click();
+});
+
 await check('New mail split button offers other items', async () => {
   await win.locator('.split-more').first().click();
   await win.getByRole('menuitem', { name: 'Event' }).waitFor();

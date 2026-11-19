@@ -20,6 +20,7 @@ const P: Record<string, string> = {
   bolt: 'M13 2L4 14h7l-1 8 9-12h-7z',
   search: 'C11 11 6.5|M16 16l4.5 4.5',
   check: 'M5 12l4 4 10-10',
+  question: 'M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6V14|M12 17.5v.5',
   close: 'M6 6l12 12M18 6L6 18',
   chevDown: 'M6 9l6 6 6-6',
   chevRight: 'M9 6l6 6-6 6',

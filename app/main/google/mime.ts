@@ -22,6 +22,8 @@ export interface MimeInput {
   references?: string;
   importance?: 'normal' | 'high';
   date?: Date;
+  /** A meeting invitation part (iMIP): e.g. a REPLY saying whether the sender is going. */
+  calendar?: { method: 'REPLY' | 'REQUEST' | 'CANCEL'; ics: string };
 }
 
 const CRLF = '\r\n';
@@ -137,6 +139,15 @@ export function buildMime(m: MimeInput): string {
     'Content-Transfer-Encoding: base64',
     '',
     wrap76(Buffer.from(html, 'utf8').toString('base64')),
+    ...(m.calendar
+      ? [
+          `--${altB}`,
+          `Content-Type: text/calendar; charset="UTF-8"; method=${m.calendar.method}`,
+          'Content-Transfer-Encoding: base64',
+          '',
+          wrap76(Buffer.from(m.calendar.ics, 'utf8').toString('base64'))
+        ]
+      : []),
     `--${altB}--`
   ].join(CRLF);
 

@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.0.21 — 2026-11-19
+
+**Meeting invitations**
+- Invitation emails now show a meeting card above the message with the title, date and time, location, organiser and a Join button for Teams, Meet or Zoom. It also says whether the meeting clashes with anything already in your calendar. The invitation's .ics file is no longer shown as an attachment.
+- **Accept**, **Tentative** and **Decline** answer the invitation and update your Google Calendar:
+  - From Google Calendar: your response is set on the event, as Gmail does, and Google tells the organiser.
+  - From Outlook, Microsoft 365, Exchange and other systems: the meeting is added to your Google Calendar, or updated if it's already there, and Davenport sends the organiser a standard meeting response, as Outlook does. Microsoft time zone names are understood.
+  - Untick **Send my response to the organiser** to change only your own calendar.
+- Cancellations show as cancelled, with **Remove from calendar** if the meeting is still in it.
+- When someone answers an invitation you sent, the email says whether they accepted, declined or tentatively accepted.
+- A calendar file that isn't an invitation (a booking or a ticket) gets an **Add to calendar** button.
+- **View in calendar** opens the Calendar on that day.
+
+**Forms and interactive emails**
+- An email containing a Google Form now offers **Open form**, to fill it in in your browser. For safety, forms are still not filled in inside emails.
+- Emails with interactive Gmail-only content (AMP) say so and offer **Open in Gmail**.
+
 ## 1.0.20 — 2026-11-18
 
 **Replying**

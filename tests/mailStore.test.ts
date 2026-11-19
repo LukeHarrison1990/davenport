@@ -18,7 +18,7 @@ describe('folders', () => {
     expect(f.slice(0, 3).map((x) => x.name)).toEqual(['Inbox', 'Drafts', 'Sent']);
     expect(f.find((x) => x.path === 'Clients/Acme')?.isCategory).toBe(true);
     const inbox = f.find((x) => x.id === 'INBOX')!;
-    expect(inbox.unread).toBe(4);
+    expect(inbox.unread).toBe(5);
     expect(f.find((x) => x.id === 'DRAFT')!.total).toBe(1);
   });
 });

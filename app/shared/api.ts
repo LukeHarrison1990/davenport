@@ -3,7 +3,7 @@
 
 import type {
   Account, AppInfo, CalEvent, CalendarInfo, ChatMessage, ChatSpace, Contact, ContactGroup, Draft, EventSave,
-  Folder, FreeBusy, ListQuery, MessageDetail, MessageSummary, OutboxItem, QuickStep, Response, Rule, SearchFolder,
+  Folder, FreeBusy, Invite, InviteResponse, ListQuery, MessageDetail, MessageSummary, OutboxItem, QuickStep, Response, Rule, SearchFolder,
   SendAs, Settings, Task, TaskList, Template, Vacation
 } from './types';
 
@@ -67,6 +67,10 @@ export interface Api {
   'mail.discardDraft'(draft: Draft): void;
   'mail.openDraft'(accountId: string, messageId: string): Draft;
   'demo.receive'(threadId: string): string;
+  'invite.get'(accountId: string, messageId: string): Invite | null;
+  'invite.respond'(accountId: string, messageId: string, response: InviteResponse, notify: boolean, comment?: string): void;
+  'invite.removeCancelled'(accountId: string, messageId: string): void;
+  'invite.addToCalendar'(accountId: string, messageId: string): void;
   'mail.prepareReply'(accountId: string, messageId: string, mode: 'reply' | 'replyAll' | 'forward'): Draft;
   'mail.newDraft'(accountId: string, to?: string): Draft;
   'mail.openAttachment'(accountId: string, messageId: string, attachmentId: string, filename: string): void;

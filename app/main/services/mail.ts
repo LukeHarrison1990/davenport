@@ -585,7 +585,7 @@ export async function prepareReply(accountId: string, messageId: string, mode: '
     draft.inReplyTo = { messageId: m.id, threadId: m.threadId, messageIdHeader: m.messageIdHeader, references: m.references };
   } else {
     draft.attachments = m.attachments
-      .filter((a) => !a.contentId)
+      .filter((a) => !a.contentId && !a.role)
       .map((a) => ({ filename: a.filename, mimeType: a.mimeType, size: a.size, fromMessage: { accountId, messageId: m.id, attachmentId: a.id } }));
   }
   return draft;
@@ -606,7 +606,7 @@ export async function openDraft(accountId: string, messageId: string): Promise<D
     subject: m.subject === '(no subject)' ? '' : m.subject,
     html: m.html ?? esc(m.text ?? ''),
     attachments: m.attachments
-      .filter((a) => !a.contentId)
+      .filter((a) => !a.contentId && !a.role)
       .map((a) => ({ filename: a.filename, mimeType: a.mimeType, size: a.size, fromMessage: { accountId, messageId, attachmentId: a.id } })),
     mode: parent ? 'reply' : 'new',
     inReplyTo: parent ? { messageId: m.id, threadId: m.threadId, messageIdHeader: parent, references: m.references } : undefined,
@@ -843,7 +843,17 @@ export async function discardDraft(d: Draft): Promise<void> {
 
 // ---------- Attachments, printing ----------
 
-async function attachmentData(accountId: string, messageId: string, attachmentId: string, filename: string): Promise<Buffer> {
+/** Sends a ready-made message straight away (no undo-send delay), e.g. a reply to a meeting invitation. */
+export async function sendRawNow(accountId: string, mime: string, threadId?: string): Promise<void> {
+  if (isDemo(accountId)) return;
+  const sent = await gmail(accountId).send(mime, threadId);
+  await fetchAndStore(accountId, [sent.id]).catch(() => undefined);
+  changed('mail', accountId);
+}
+
+export async function attachmentData(accountId: string, messageId: string, attachmentId: string, filename: string): Promise<Buffer> {
+  const inline = (store.getDetail(accountId, messageId)?.attachments.find((a) => a.id === attachmentId) as { inlineData?: string } | undefined)?.inlineData;
+  if (inline) return Buffer.from(inline.replace(/-/g, '+').replace(/_/g, '/'), 'base64');
   if (isDemo(accountId)) return demoAttachment(filename);
   return gmail(accountId).attachment(messageId, attachmentId);
 }
@@ -900,7 +910,7 @@ function printableHtml(m: MessageDetail): string {
   table{font-size:10pt;color:#333;margin-bottom:14px;border-bottom:1px solid #999;padding-bottom:8px;width:100%}td:first-child{width:70px;font-weight:600;vertical-align:top}</style></head>
   <body><h1>${esc(m.subject)}</h1><table><tr><td>From</td><td>${fmtAddr(m.from)}</td></tr><tr><td>Sent</td><td>${esc(new Date(m.date).toLocaleString('en-GB', { dateStyle: 'full', timeStyle: 'short' }))}</td></tr>
   <tr><td>To</td><td>${list(m.to)}</td></tr>${m.cc.length ? `<tr><td>Cc</td><td>${list(m.cc)}</td></tr>` : ''}
-  ${m.attachments.filter((a) => !a.contentId).length ? `<tr><td>Attached</td><td>${m.attachments.filter((a) => !a.contentId).map((a) => esc(a.filename)).join('; ')}</td></tr>` : ''}</table>
+  ${m.attachments.filter((a) => !a.contentId && !a.role).length ? `<tr><td>Attached</td><td>${m.attachments.filter((a) => !a.contentId && !a.role).map((a) => esc(a.filename)).join('; ')}</td></tr>` : ''}</table>
   ${m.html ? stripActiveContent(m.html) : `<pre style="white-space:pre-wrap;font-family:inherit">${esc(m.text ?? '')}</pre>`}</body></html>`;
 }
 
