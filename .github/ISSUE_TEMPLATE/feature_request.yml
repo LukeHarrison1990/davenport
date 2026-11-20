@@ -1,0 +1,15 @@
+name: Feature request
+description: Suggest something Davenport could do
+labels: [enhancement]
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: What would you like to do?
+      description: Describe what you're trying to get done. If it's something Outlook or Gmail does, say how it works there.
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why does it matter?
