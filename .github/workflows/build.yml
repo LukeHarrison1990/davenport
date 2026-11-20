@@ -37,7 +37,7 @@ jobs:
         env:
           DAVENPORT_CLIENT_ID: ${{ secrets.DAVENPORT_CLIENT_ID }}
           DAVENPORT_CLIENT_SECRET: ${{ secrets.DAVENPORT_CLIENT_SECRET }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: davenport-windows
           path: |
@@ -62,7 +62,7 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: false
           DAVENPORT_CLIENT_ID: ${{ secrets.DAVENPORT_CLIENT_ID }}
           DAVENPORT_CLIENT_SECRET: ${{ secrets.DAVENPORT_CLIENT_SECRET }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: davenport-macos
           path: release/*.dmg
@@ -82,7 +82,7 @@ jobs:
         env:
           DAVENPORT_CLIENT_ID: ${{ secrets.DAVENPORT_CLIENT_ID }}
           DAVENPORT_CLIENT_SECRET: ${{ secrets.DAVENPORT_CLIENT_SECRET }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: davenport-linux
           path: |
