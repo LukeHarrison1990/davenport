@@ -1,0 +1,37 @@
+name: Bug report
+description: Something in Davenport isn't working as it should
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead? Screenshots help (blur anything private).
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Davenport version
+      description: Settings › About
+      placeholder: "1.1.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options: [Windows 11, Windows 10, macOS, Linux]
+    validations:
+      required: true
+  - type: dropdown
+    id: account
+    attributes:
+      label: Account type
+      options: [Google Workspace, Personal Gmail, Demo account]
+  - type: textarea
+    id: log
+    attributes:
+      label: Error log
+      description: If there is one, paste the relevant lines from davenport-errors.log, in the data folder shown in Settings › About (on Windows, %APPDATA%\Davenport). Check it for anything private first.
+      render: text

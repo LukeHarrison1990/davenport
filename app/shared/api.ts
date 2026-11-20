@@ -24,7 +24,8 @@ export interface Api {
   'app.maximise'(): void;
 
   // OAuth client and accounts
-  'auth.getClient'(): { clientId: string; hasSecret: boolean; source: 'settings' | 'file' | 'none' };
+  'auth.getClient'(): { clientId: string; hasSecret: boolean; source: 'settings' | 'file' | 'builtin' | 'none'; builtInAvailable: boolean };
+  'auth.clearClient'(): void;
   'auth.setClient'(clientId: string, clientSecret: string): void;
   'auth.loadClientFile'(): { clientId: string } | null;
   'accounts.list'(): Account[];

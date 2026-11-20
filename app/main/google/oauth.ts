@@ -5,7 +5,7 @@ import http from 'node:http';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { kvGet, kvSet } from '../db';
+import { kvDelete, kvGet, kvSet } from '../db';
 import { seal, unseal } from '../secure';
 
 /** Full Gmail access: everything gmail.modify allows, plus permanently deleting messages (Delete forever, Empty Bin). */
@@ -37,15 +37,29 @@ export const CHAT_SCOPES = [
 export interface OAuthClient {
   clientId: string;
   clientSecret: string;
-  source: 'settings' | 'file';
+  source: 'settings' | 'file' | 'builtin';
 }
+
+// Davenport's own Google app, added when the installer is built (from oauth-client.json or the
+// DAVENPORT_CLIENT_ID / DAVENPORT_CLIENT_SECRET environment variables; see docs/BUILDING.md). It is never in the
+// source code, so copies built by other people don't sign in as Davenport. Google treats a desktop app's secret
+// as not confidential: sign-in is protected by PKCE and the loopback redirect instead.
+declare const __DAVENPORT_CLIENT_ID__: string;
+declare const __DAVENPORT_CLIENT_SECRET__: string;
+const BUILT_IN: { clientId: string; clientSecret: string } | null =
+  typeof __DAVENPORT_CLIENT_ID__ === 'string' && __DAVENPORT_CLIENT_ID__ ? { clientId: __DAVENPORT_CLIENT_ID__, clientSecret: __DAVENPORT_CLIENT_SECRET__ } : null;
+
+export const hasBuiltInClient = (): boolean => !!BUILT_IN;
 
 interface StoredClient {
   clientId: string;
   secret: string; // sealed
 }
 
-/** Reads the OAuth client from settings, or from an oauth-client.json placed next to the app or in its data folder. */
+/**
+ * The Google app Davenport signs in as: one the user (or their organisation) set up in settings or in an
+ * oauth-client.json beside the app or in its data folder, otherwise Davenport's own built-in one.
+ */
 export function getOAuthClient(): OAuthClient | null {
   const stored = kvGet<StoredClient>('oauth', 'client');
   if (stored?.clientId) {
@@ -60,7 +74,12 @@ export function getOAuthClient(): OAuthClient | null {
     const parsed = readClientFile(file);
     if (parsed) return { ...parsed, source: 'file' };
   }
-  return null;
+  return BUILT_IN ? { ...BUILT_IN, source: 'builtin' } : null;
+}
+
+/** Stop using a client set in settings, going back to the built-in one. */
+export function clearOAuthClient(): void {
+  kvDelete('oauth', 'client');
 }
 
 export function readClientFile(file: string): { clientId: string; clientSecret: string } | null {

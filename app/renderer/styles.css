@@ -614,3 +614,6 @@ textarea.input { min-height: 90px; resize: vertical; font-family: var(--font); }
 .invite-buttons { display: flex; gap: 6px; }
 .invite-notify { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
 .invite-status { font-size: 13px; color: var(--muted); }
+
+details.advanced { margin-top: 8px; }
+details.advanced > summary { cursor: pointer; color: var(--accent); font-size: 13px; margin-bottom: 8px; }

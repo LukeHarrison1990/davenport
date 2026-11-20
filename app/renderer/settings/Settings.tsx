@@ -10,30 +10,37 @@ import licenceText from '../../../LICENSE?raw';
 const CAT_COLOURS = ['#24497A', '#2E7D5B', '#9A7740', '#7A4E9C', '#B3361F', '#1E7A8A', '#5C6B2E', '#5B6472'];
 
 export function OAuthClientForm({ onDone }: { onDone?: () => void }) {
-  const [client, setClient] = useState<{ clientId: string; hasSecret: boolean; source: string } | null>(null);
+  const [client, setClient] = useState<{ clientId: string; hasSecret: boolean; source: string; builtInAvailable: boolean } | null>(null);
   const [id, setId] = useState('');
   const [secret, setSecret] = useState('');
-  useEffect(() => {
+  const load = () =>
     call('auth.getClient').then((c) => {
       setClient(c);
       setId(c.clientId);
+      setSecret('');
     });
-  }, []);
+  useEffect(() => void load(), []);
   const save = async () => {
     if (!id.trim().endsWith('.apps.googleusercontent.com')) return notify('That doesn\'t look like a Google client ID (it ends in .apps.googleusercontent.com).', 'error');
     await call('auth.setClient', id.trim(), secret.trim());
-    setClient({ clientId: id.trim(), hasSecret: !!secret.trim(), source: 'settings' });
-    notify('Google connection saved.');
+    await load();
+    notify('Google connection saved. Accounts added with a different connection need to sign in again.');
     onDone?.();
   };
-  return (
+  const useBuiltIn = async () => {
+    await call('auth.clearClient');
+    await load();
+    notify('Using Davenport’s own Google connection. Accounts added with your own connection need to sign in again.');
+    onDone?.();
+  };
+  const form = (
     <div>
       <p className="hint-text">
-        Davenport signs in to Google as <b>your own app</b>, so your mail never passes through anyone else's servers. Create a <b>Desktop app</b> OAuth client in Google Cloud Console
-        (the setup guide in the README walks through it in about ten minutes), then load the JSON file Google gives you, or paste the ID and secret.
+        Organisations that would rather Davenport signed in as their own Google app can create a <b>Desktop app</b> OAuth client in their
+        Google Cloud project (docs/GOOGLE-SETUP.md walks through it), then load the JSON file Google gives them, or paste the ID and secret.
       </p>
       <div style={{ display: 'flex', gap: 8, margin: '10px 0' }}>
-        <button className="btn" onClick={() => call('auth.loadClientFile').then((r) => { if (r) { setId(r.clientId); setClient({ clientId: r.clientId, hasSecret: true, source: 'settings' }); notify('Google connection loaded.'); onDone?.(); } }).catch(fail)}>
+        <button className="btn" onClick={() => call('auth.loadClientFile').then(async (r) => { if (r) { await load(); notify('Google connection loaded.'); onDone?.(); } }).catch(fail)}>
           <Icon name="open" /> Load client JSON file…
         </button>
         <button className="btn ghost" onClick={() => call('app.openExternal', 'https://console.cloud.google.com/apis/credentials')}>Open Google Cloud Console</button>
@@ -43,6 +50,30 @@ export function OAuthClientForm({ onDone }: { onDone?: () => void }) {
         <input className="input" type="password" value={secret} onChange={(e) => setSecret(e.target.value)} placeholder={client?.hasSecret ? '••••••••' : 'GOCSPX-…'} />
       </Field>
       <button className="btn primary" onClick={save} disabled={!id}>Save</button>
+    </div>
+  );
+  if (!client) return null;
+  if (client.source === 'builtin')
+    return (
+      <div>
+        <p className="hint-text">Davenport signs in with its own Google app, so there's nothing to set up: just add an account.</p>
+        <details className="advanced">
+          <summary>Use your own Google Cloud project instead</summary>
+          {form}
+        </details>
+      </div>
+    );
+  return (
+    <div>
+      {client.source !== 'none' && (
+        <p className="hint-text">
+          Signing in with {client.source === 'file' ? 'the Google app in oauth-client.json' : 'your own Google app'}: <code>{client.clientId}</code>
+        </p>
+      )}
+      {client.source === 'settings' && client.builtInAvailable && (
+        <button className="btn" style={{ marginBottom: 12 }} onClick={() => void useBuiltIn().catch(fail)}>Use Davenport’s own connection instead</button>
+      )}
+      {client.source !== 'file' && form}
     </div>
   );
 }

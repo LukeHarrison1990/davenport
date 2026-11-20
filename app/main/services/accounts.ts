@@ -76,19 +76,21 @@ function nextColor(): string {
 }
 
 export async function addGoogleAccount(): Promise<Account> {
-  const res = await signIn({ scopes: BASE_SCOPES });
+  // One sign-in asks for everything, Chat included; Chat is switched on if it was allowed (Workspace accounts).
+  const res = await signIn({ scopes: [...BASE_SCOPES, ...CHAT_SCOPES] });
   if (!res.tokens.refresh_token) throw new Error('Google did not return a refresh token. Remove Davenport from your Google account permissions and try again.');
+  const chatAllowed = !!res.hostedDomain && res.tokens.scope.split(' ').includes('https://www.googleapis.com/auth/chat.messages');
   const existing = get<{ id: string }>('SELECT id FROM accounts WHERE email = ? AND kind = ?', res.email, 'google');
   const id = existing?.id ?? uid();
   tx(() => {
     if (!existing) {
       const sort = (get<{ n: number }>('SELECT COUNT(*) AS n FROM accounts')?.n ?? 0) + 1;
       run(
-        'INSERT INTO accounts (id, email, name, kind, color, is_workspace, chat_enabled, status, sort) VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)',
-        id, res.email, res.name, 'google', nextColor(), !!res.hostedDomain, 'syncing', sort
+        'INSERT INTO accounts (id, email, name, kind, color, is_workspace, chat_enabled, status, sort) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        id, res.email, res.name, 'google', nextColor(), !!res.hostedDomain, chatAllowed ? 1 : 0, 'syncing', sort
       );
     } else {
-      run("UPDATE accounts SET name = ?, status = 'syncing', error = NULL WHERE id = ?", res.name, id);
+      run("UPDATE accounts SET name = ?, status = 'syncing', error = NULL, chat_enabled = MAX(chat_enabled, ?) WHERE id = ?", res.name, chatAllowed ? 1 : 0, id);
     }
     saveTokens(id, res.tokens);
   });
@@ -99,7 +101,7 @@ export async function addGoogleAccount(): Promise<Account> {
 
 export async function reauthAccount(accountId: string): Promise<Account> {
   const a = getAccount(accountId);
-  const scopes = a.chatEnabled ? [...BASE_SCOPES, ...CHAT_SCOPES] : BASE_SCOPES;
+  const scopes = a.chatEnabled || a.isWorkspace ? [...BASE_SCOPES, ...CHAT_SCOPES] : BASE_SCOPES;
   const res = await signIn({ scopes, loginHint: a.email });
   if (res.email.toLowerCase() !== a.email.toLowerCase()) throw new Error(`You signed in as ${res.email}, but this account is ${a.email}.`);
   saveTokens(accountId, res.tokens);

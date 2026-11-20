@@ -7,7 +7,7 @@ import type { Api } from '../shared/api';
 import type { QuickStep, SearchFolder, Template } from '../shared/types';
 import { kvAll, kvDelete, kvSet, uid } from './db';
 import { changed } from './events';
-import { getOAuthClient, readClientFile, setOAuthClient } from './google/oauth';
+import { clearOAuthClient, getOAuthClient, hasBuiltInClient, readClientFile, setOAuthClient } from './google/oauth';
 import { getSettings, setSettings } from './settings';
 import * as accounts from './services/accounts';
 import * as mail from './services/mail';
@@ -164,8 +164,12 @@ const impl: Impl = {
 
   'auth.getClient': () => {
     const c = getOAuthClient();
-    return { clientId: c?.clientId ?? '', hasSecret: !!c?.clientSecret, source: c?.source ?? 'none' };
+    // Davenport's own client isn't shown: it's only a label for "Davenport", not something to edit.
+    return c?.source === 'builtin'
+      ? { clientId: '', hasSecret: false, source: 'builtin' as const, builtInAvailable: true }
+      : { clientId: c?.clientId ?? '', hasSecret: !!c?.clientSecret, source: c?.source ?? ('none' as const), builtInAvailable: hasBuiltInClient() };
   },
+  'auth.clearClient': () => clearOAuthClient(),
   'auth.setClient': (_c, id, secret) => setOAuthClient(id, secret),
   'auth.loadClientFile': async (c) => {
     const win = BrowserWindow.fromWebContents(c.sender);

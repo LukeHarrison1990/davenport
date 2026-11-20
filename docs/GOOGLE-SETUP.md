@@ -1,6 +1,11 @@
-# Connecting Davenport to Google (one-time setup)
+# Using your own Google Cloud project (optional)
 
-Davenport signs in to Google as an app that **you** own, in your own Google Cloud project. Nothing passes through anyone else's servers, and no Google review is needed for your own use. Allow about ten minutes.
+Davenport normally signs in with its own Google app: you just choose **Add a Google account** and sign in. You only need this guide if:
+
+- your organisation would rather Davenport signed in as **its own** app (for example an *Internal* app in your Workspace, which needs no Google review and that your admins fully control), or
+- you've built Davenport from source without Davenport's Google client.
+
+Either way nothing passes through anyone else's servers. Allow about ten minutes.
 
 ## 1. Create a project and enable the APIs
 
@@ -26,10 +31,10 @@ App name: *Davenport*. Support email: yours. Scopes can be left blank here — D
 ## 3. Create the OAuth client
 
 1. Open **APIs & Services › Credentials › Create credentials › OAuth client ID**.
-2. Application type: **Desktop app**. Name: *Davenport for Windows*.
+2. Application type: **Desktop app**. Name: *Davenport desktop* (the same client works on Windows, macOS and Linux).
 3. Click **Create**, then **Download JSON**.
 
-In Davenport choose **Add a Google account › Load client JSON file…** and pick the file. (Or paste the client ID and secret. Google issues a secret for desktop apps even though it can't be kept truly secret; Davenport also uses PKCE, and stores the secret encrypted.)
+In Davenport open **Settings › Accounts › Use your own Google Cloud project instead › Load client JSON file…** and pick the file (in a build without Davenport's client, **Add a Google account** takes you straight there). (Or paste the client ID and secret. Google issues a secret for desktop apps even though it can't be kept truly secret; Davenport also uses PKCE, and stores the secret encrypted.)
 
 Tip for organisations: put the JSON file next to `Davenport.exe` (or in `%APPDATA%\Davenport`) named `oauth-client.json`, and everyone gets connected automatically.
 
@@ -45,7 +50,7 @@ Reading Chat works as soon as the Chat API is switched on. Google also requires 
 3. Leave **Enable interactive features** turned off. Davenport only uses the API, so no connection settings are needed.
 4. Click **Save**. It can take a minute or two to start working.
 
-Then in Davenport open **Settings › Accounts › Turn on Chat** and approve the extra permissions.
+Chat is included when you sign in to a Workspace account. Accounts added before Davenport 1.1 can switch it on in **Settings › Accounts › Turn on Chat**.
 
 ### Chat status
 
@@ -61,6 +66,6 @@ Davenport sets your Chat status (Automatic, Do not disturb, Away, and a status m
 | Contacts, other contacts, directory | Address book, autocomplete, organisation directory |
 | Tasks (`tasks`) | To-Do bar and follow-up flags |
 | Drive files Davenport creates (`drive.file`) | Sharing large attachments as Drive links — Davenport can't see your other Drive files |
-| Chat (optional) | Spaces, messages, reactions, read state, your Chat status |
+| Chat (Workspace accounts) | Spaces, messages, reactions, read state, your Chat status |
 
 You can remove access at any time from your Google Account's **Security › Third-party apps** page, or by removing the account in Davenport (which revokes the token).

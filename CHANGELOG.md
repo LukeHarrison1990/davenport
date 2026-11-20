@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.1.0 — 2026-11-20
+
+**Sign in with Google**
+- Adding an account is now just **Add a Google account**, then sign in and click Allow in your browser. Davenport signs in with its own Google app, so there's no Google Cloud project to create and no JSON file to load.
+- One sign-in now covers everything, Google Chat included, for Workspace accounts. There's no separate "Turn on Chat" step.
+- Organisations that would rather use their own Google Cloud project still can: **Settings › Accounts › Use your own Google Cloud project instead**. Davenport installations already set up that way keep working as they are, and can switch to Davenport's own connection in the same place.
+- Until Google finishes reviewing Davenport, its sign-in page may say "Google hasn't verified this app". Choose **Advanced › Go to Davenport**.
+
 ## 1.0.21 — 2026-11-19
 
 **Meeting invitations**
