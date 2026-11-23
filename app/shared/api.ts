@@ -3,7 +3,7 @@
 
 import type {
   Account, AppInfo, CalEvent, CalendarInfo, ChatMessage, ChatSpace, Contact, ContactGroup, Draft, EventSave,
-  Folder, FreeBusy, Invite, InviteResponse, ListQuery, MessageDetail, MessageSummary, OutboxItem, QuickStep, Response, Rule, SearchFolder,
+  Folder, FreeBusy, Invite, InviteResponse, ListQuery, UpdateState, MessageDetail, MessageSummary, OutboxItem, QuickStep, Response, Rule, SearchFolder,
   SendAs, Settings, Task, TaskList, Template, Vacation
 } from './types';
 
@@ -11,6 +11,10 @@ export interface Api {
   // App
   'app.info'(): AppInfo;
   'app.openExternal'(url: string): void;
+  'update.state'(): UpdateState;
+  'update.check'(): UpdateState;
+  'update.download'(): void;
+  'update.install'(): void;
   'app.openWindow'(kind: 'compose' | 'event' | 'message', params: Record<string, string>): void;
   'app.copyText'(text: string): void;
   'app.openThirdPartyLicences'(): void;
@@ -163,4 +167,5 @@ export interface EngineEvents {
   navigate: { module: string; accountId?: string; id?: string; threadId?: string };
   syncStatus: { accountId: string; status: import('./types').AccountStatus; detail?: string };
   syncProgress: import('./types').SyncProgress;
+  update: import('./types').UpdateState;
 }

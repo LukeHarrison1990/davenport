@@ -12,6 +12,7 @@ import { listAccounts } from './services/accounts';
 import { newDraft } from './services/mail';
 import { emit } from './events';
 import { parseMailto, type MailtoParts } from './mailto';
+import { startUpdateChecks } from './updater';
 
 // Test-only switches (used by the automated checks); the installed app ignores them.
 if (!app.isPackaged) {
@@ -69,6 +70,7 @@ if (!app.requestSingleInstanceLock()) {
       () => void openNewMail()
     );
     startScheduler();
+    startUpdateChecks();
     if (process.platform === 'win32') app.setAsDefaultProtocolClient('mailto');
     const mailto = process.argv.find((a) => a.startsWith('mailto:'));
     if (mailto) void openMailto(mailto);

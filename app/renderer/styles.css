@@ -617,3 +617,10 @@ textarea.input { min-height: 90px; resize: vertical; font-family: var(--font); }
 
 details.advanced { margin-top: 8px; }
 details.advanced > summary { cursor: pointer; color: var(--accent); font-size: 13px; margin-bottom: 8px; }
+
+/* Updates */
+.update-banner { position: fixed; left: 16px; bottom: 36px; z-index: 900; display: flex; align-items: flex-start; gap: 12px; max-width: 520px; padding: 12px 14px; background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--accent); border-radius: 8px; box-shadow: 0 8px 28px rgba(15, 28, 51, 0.18); font-size: 13px; }
+.update-banner .grow { flex: 1; min-width: 0; }
+.update-banner .sub { color: var(--muted); margin-top: 2px; }
+.update-notes { white-space: pre-wrap; font: inherit; max-height: 180px; overflow: auto; margin: 8px 0 0; padding: 8px; background: var(--surface-2, rgba(127,127,127,.08)); border-radius: 6px; }
+.update-settings { margin: 12px 0; }

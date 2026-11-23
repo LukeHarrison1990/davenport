@@ -964,7 +964,10 @@ export async function savePdf(accountId: string, id: string): Promise<string | n
 
 // ---------- Rules (Gmail filters plus local rules) ----------
 
-const filterToRule = (accountId: string, f: GFilter, labels: Map<string, string>): Rule => ({
+const filterToRule = (accountId: string, raw: GFilter, labels: Map<string, string>): Rule => {
+  // Gmail leaves out empty parts of a filter (no criteria it doesn't use, no actions), so fill them in.
+  const f = { ...raw, criteria: raw.criteria ?? {}, action: raw.action ?? {} };
+  return {
   id: 'f:' + f.id,
   accountId,
   name: [f.criteria.from && `From ${f.criteria.from}`, f.criteria.to && `To ${f.criteria.to}`, f.criteria.subject && `Subject "${f.criteria.subject}"`, f.criteria.query]
@@ -984,19 +987,34 @@ const filterToRule = (accountId: string, f: GFilter, labels: Map<string, string>
   },
   serverFilterId: f.id,
   where: 'server'
-});
+  };
+};
 
 export async function listRules(accountId: string): Promise<Rule[]> {
   const local = kvAll<Rule>('rules').filter((r) => r.accountId === accountId);
   if (isDemo(accountId)) return local;
   const labels = new Map(store.labelRows(accountId).filter((l) => l.type === 'user').map((l) => [l.id, l.path]));
+  const toRules = (filters: GFilter[]) =>
+    filters.flatMap((f) => {
+      try {
+        return [filterToRule(accountId, f, labels)];
+      } catch (e) {
+        console.error('[rules] skipped a Gmail filter Davenport could not read:', JSON.stringify(f), e);
+        return [];
+      }
+    });
+  let filters: GFilter[];
   try {
-    const filters = await gmail(accountId).filters();
+    filters = await gmail(accountId).filters();
     kvSet('filters', accountId, filters);
-    return [...filters.map((f) => filterToRule(accountId, f, labels)), ...local];
-  } catch {
-    return [...(kvGet<GFilter[]>('filters', accountId) ?? []).map((f) => filterToRule(accountId, f, labels)), ...local];
+  } catch (e) {
+    console.error('[rules] could not load Gmail filters:', e);
+    const cached = kvGet<GFilter[]>('filters', accountId);
+    // With nothing saved from before, say why the list is empty rather than showing "No rules yet".
+    if (!cached) throw new Error(`Davenport couldn't load your Gmail filters: ${(e as Error).message}`);
+    filters = cached;
   }
+  return [...toRules(filters), ...local];
 }
 
 export async function saveRule(rule: Rule): Promise<Rule> {
@@ -1014,6 +1032,7 @@ export async function saveRule(rule: Rule): Promise<Rule> {
         await runRuleActions(rule.accountId, local, matches.map((m) => m.id));
       }
     }
+    changed('rules', rule.accountId);
     return { ...rule, id: 'f:' + f.id, serverFilterId: f.id };
   }
   const r = { ...rule, id: rule.id || uid(), where: 'local' as const };

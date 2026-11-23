@@ -121,7 +121,22 @@ const emptyRule = (accountId: string): Rule => ({ id: '', accountId, name: '', e
 export function RulesDialog({ arg, onClose }: { arg?: { from?: string; subject?: string; accountId?: string }; onClose: () => void }) {
   const { accounts } = useApp();
   const [accountId, setAccountId] = useState(arg?.accountId ?? accounts[0]?.id ?? '');
-  const [rules, reload] = useLive(() => (accountId ? call('rules.list', accountId) : Promise.resolve([])), ['rules'], [accountId], [] as Rule[]);
+  const [listError, setListError] = useState<string | null>(null);
+  const [rules, reload, loadingRules] = useLive(
+    () =>
+      accountId
+        ? call('rules.list', accountId).then(
+            (r) => (setListError(null), r),
+            (e) => {
+              setListError((e as Error).message);
+              throw e;
+            }
+          )
+        : Promise.resolve([] as Rule[]),
+    ['rules'],
+    [accountId],
+    [] as Rule[]
+  );
   const [edit, setEdit] = useState<Rule | null>(arg?.from ? { ...emptyRule(accountId), name: `Mail from ${arg.from}`, conditions: { from: arg.from } } : null);
   const folders = useFolders(accountId);
 
@@ -199,7 +214,11 @@ export function RulesDialog({ arg, onClose }: { arg?: { from?: string; subject?:
             <button className="btn small danger" onClick={() => window.confirm('Delete this rule?') && call('rules.delete', accountId, r.id).then(reload).catch(fail)}>Delete</button>
           </div>
         ))}
-        {!rules.length && <div className="item"><span className="sub">No rules yet.</span></div>}
+        {!rules.length && (
+          <div className="item">
+            <span className="sub">{loadingRules ? 'Loading rules…' : listError ? listError : 'No rules yet.'}</span>
+          </div>
+        )}
       </div>
     </Dialog>
   );

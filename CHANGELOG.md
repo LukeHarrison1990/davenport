@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.2.0 — unreleased
+
+**Updates**
+- Davenport now keeps itself up to date. It checks GitHub for a new version shortly after starting and every six hours, and when there's one it says so in the corner of the window: **Update** downloads it in the background, then **Restart and install** installs it and opens Davenport again. Nothing installs without you choosing to.
+- Settings › About has **Check for updates** and a setting to switch the automatic checks off.
+
+**For network managers**
+- Davenport installs silently with `/S /allusers`, and the new `/DISABLEUPDATES` switch (or a registry policy) leaves updates to you. An organisation's own Google client can be deployed to `C:\ProgramData\Davenport\oauth-client.json`. All of it is in the new deployment guide, docs/DEPLOYMENT.md.
+
+**Fixes**
+- The Rules window could say "No rules yet" even though your rules existed in Gmail. Davenport now reads every kind of Gmail filter, shows "Loading rules…" while it fetches them, and says what went wrong instead of an empty list if Gmail can't be reached.
+
 ## 1.1.0 — 2026-11-20
 
 **Sign in with Google**

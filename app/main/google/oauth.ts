@@ -67,6 +67,8 @@ export function getOAuthClient(): OAuthClient | null {
   }
   const candidates = [
     path.join(app.getPath('userData'), 'oauth-client.json'),
+    // Deployed by IT for every user of the computer; outside the program folder, so updates don't remove it.
+    process.platform === 'win32' && process.env.ProgramData ? path.join(process.env.ProgramData, 'Davenport', 'oauth-client.json') : '',
     path.join(path.dirname(app.getPath('exe')), 'oauth-client.json'),
     process.env.PORTABLE_EXECUTABLE_DIR ? path.join(process.env.PORTABLE_EXECUTABLE_DIR, 'oauth-client.json') : ''
   ].filter(Boolean);

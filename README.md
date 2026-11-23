@@ -27,6 +27,10 @@ Get the latest build from the [Releases](../../releases) page:
 
 The builds are not yet code-signed, so Windows SmartScreen will warn the first time: choose **More info › Run anyway**.
 
+Davenport keeps itself up to date: it checks this repository's releases and offers new versions, which install when you say so (Settings › About › **Check for updates**).
+
+**Installing across an organisation?** Davenport installs silently (`Davenport-Setup-<version>.exe /S /allusers`), and network managers can switch off its own updates and deploy their own Google client. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+
 ## First run
 
 1. Start Davenport and choose **Add a Google account**. Your browser opens Google's own sign-in page; sign in and click **Allow**. That's it.

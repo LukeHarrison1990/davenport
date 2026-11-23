@@ -19,6 +19,7 @@ import * as chat from './services/chat';
 import * as ooo from './services/outOfOffice';
 import { demoReceive, seedDemo } from './demo';
 import * as invites from './services/invites';
+import * as updater from './updater';
 import { manualSync, syncAccount, syncProgress } from './sync';
 import { openChildWindow, paramsFor, setTitleBarColour } from './windows';
 import { updateBadge } from './tray';
@@ -262,6 +263,10 @@ const impl: Impl = {
   'mail.discardDraft': (_c, d) => mail.discardDraft(d),
   'mail.openDraft': (_c, a, id) => mail.openDraft(a, id),
   'demo.receive': (_c, threadId) => demoReceive(threadId),
+  'update.state': () => updater.updateState(),
+  'update.check': () => updater.checkForUpdates(true),
+  'update.download': () => updater.downloadUpdate(),
+  'update.install': () => updater.installUpdate(),
   'invite.get': (_c, a, id) => invites.getInvite(a, id),
   'invite.respond': (_c, a, id, r, notify, comment) => invites.respond(a, id, r, notify, comment),
   'invite.removeCancelled': (_c, a, id) => invites.removeCancelled(a, id),

@@ -445,6 +445,21 @@ export interface Settings {
   pollSeconds: number;
   favourites: { accountId: string; labelId: string }[];
   unifiedInbox: boolean;
+  /** Check GitHub for new versions and offer them. */
+  autoUpdate: boolean;
+}
+
+/** Where Davenport's own updating has got to. */
+export interface UpdateState {
+  status: 'idle' | 'checking' | 'current' | 'available' | 'downloading' | 'ready' | 'error' | 'managed';
+  current: string;
+  latest?: string;
+  notes?: string;
+  percent?: number;
+  error?: string;
+  checkedAt?: number;
+  /** A portable copy: updates are a download from the releases page rather than installed in place. */
+  portable?: boolean;
 }
 
 export const defaultSettings: Settings = {
@@ -472,7 +487,8 @@ export const defaultSettings: Settings = {
   attachAsDriveLinkOverMB: 25,
   pollSeconds: 45,
   favourites: [],
-  unifiedInbox: true
+  unifiedInbox: true,
+  autoUpdate: true
 };
 
 /** Progress of a Send / Receive (F9). */

@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react';
 import { call, onEngine } from './api';
 import { MenuHost } from './components/Menu';
 import { Toasts } from './components/ui';
+import { UpdateBanner } from './components/UpdateBanner';
 import { MailView } from './mail/MailView';
 import { MoveDialog, NewFolderDialog, OutOfOfficeDialog, QuickStepsDialog, RulesDialog, SearchFolderDialog, SignatureDialog, TemplatesDialog } from './mail/dialogs';
 import { AboutDialog, SettingsDialog, Welcome } from './settings/Settings';
@@ -112,6 +113,7 @@ export function App() {
       {dialog === 'signature' && <SignatureDialog onClose={close} />}
       {dialog === 'subscribe' && <SubscribeDialog onClose={close} />}
       <MenuHost />
+      <UpdateBanner />
       <Toasts />
     </div>
   );

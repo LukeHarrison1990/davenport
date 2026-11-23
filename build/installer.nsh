@@ -29,3 +29,16 @@
   !define MUI_LICENSEPAGE_BUTTON "$(^NextBtn)"
   !insertmacro MUI_PAGE_LICENSE "${BUILD_RESOURCES_DIR}\mit-licence.txt"
 !macroend
+
+; Deployment switches for network managers (see docs/DEPLOYMENT.md), alongside electron-builder's own
+; /S (silent), /allusers, /currentuser and /D=<folder>:
+;   /DISABLEUPDATES   switch off Davenport's own update checks on this computer (needs /allusers)
+!include "FileFunc.nsh"
+!macro customInstall
+  ${GetParameters} $R0
+  ClearErrors
+  ${GetOptions} $R0 "/DISABLEUPDATES" $R1
+  ${IfNot} ${Errors}
+    WriteRegDWORD HKLM "SOFTWARE\Policies\Davenport" "DisableUpdates" 1
+  ${EndIf}
+!macroend

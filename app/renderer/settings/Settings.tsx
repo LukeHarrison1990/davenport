@@ -1,4 +1,5 @@
 // Settings and first-run: accounts and Google connection, appearance, mail, calendar, categories.
+import { UpdateSettings } from '../components/UpdateBanner';
 import { useEffect, useState } from 'react';
 import type { AppInfo, Folder } from '../../shared/types';
 import { call, useLive } from '../api';
@@ -391,6 +392,7 @@ function About({ info }: { info: AppInfo | null }) {
         </div>
       </div>
       <p>A desktop email, calendar, contacts and chat app for Google Workspace.</p>
+      <AboutUpdates />
       <p>
         Davenport is free software, licensed under the MIT License:
       </p>
@@ -407,6 +409,11 @@ function About({ info }: { info: AppInfo | null }) {
       )}
     </div>
   );
+}
+
+function AboutUpdates() {
+  const { settings, updateSettings } = useApp();
+  return <UpdateSettings autoUpdate={settings.autoUpdate !== false} onToggle={(on) => updateSettings({ autoUpdate: on })} />;
 }
 
 export function AboutDialog({ onClose }: { onClose: () => void }) {
