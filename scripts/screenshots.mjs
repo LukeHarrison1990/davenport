@@ -45,6 +45,12 @@ if (only !== 'mail') {
   await win.evaluate(() => window.davenport.invoke('settings.set', { theme: 'dark' }));
   await win.locator('#message-list .row').nth(1).click();
   await shot('06-mail-dark');
+  if (process.env.DAVENPORT_SITE_SHOTS) {
+    await win.keyboard.press('Control+2');
+    await shot('07-calendar-dark');
+    await win.keyboard.press('Control+4');
+    await shot('08-chat-dark');
+  }
   await win.evaluate(() => window.davenport.invoke('settings.set', { theme: 'light' }));
 }
 app.process().kill();

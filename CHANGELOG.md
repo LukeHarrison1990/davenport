@@ -9,6 +9,9 @@
 **For network managers**
 - Davenport installs silently with `/S /allusers`, and the new `/DISABLEUPDATES` switch (or a registry policy) leaves updates to you. An organisation's own Google client can be deployed to `C:\ProgramData\Davenport\oauth-client.json`. All of it is in the new deployment guide, docs/DEPLOYMENT.md.
 
+**New look**
+- A new Davenport logo: a bright blue curve folding over a dark stem to make a "D". It's on the app, the taskbar, the installer, the website and the Google sign-in page.
+
 **Fixes**
 - The Rules window could say "No rules yet" even though your rules existed in Gmail. Davenport now reads every kind of Gmail filter, shows "Loading rules…" while it fetches them, and says what went wrong instead of an empty list if Gmail can't be reached.
 

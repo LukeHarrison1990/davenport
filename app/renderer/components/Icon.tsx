@@ -121,22 +121,39 @@ export function Icon({ name, size = 16, className, title, strokeWidth = 1.6, fil
 /** Davenport's mark: an envelope shaped as a "D", with an amber new-mail dot.
  *  `tile` draws the full-colour app icon; otherwise a white version for the coloured title bar. */
 export function Logo({ size = 22, tile = false }: { size?: number; tile?: boolean }) {
+  // Davenport's "Fold" mark. `tile` is the full-colour logo; otherwise a white version for the coloured title bar.
   const id = tile ? 'dav-logo-c' : 'dav-logo-w';
+  const counter = <path d="M108 92h14a36 36 0 0 1 0 72h-14z" fill="#000" />;
   return (
     <svg width={size} height={size} viewBox="0 0 256 256" aria-hidden>
       <defs>
-        <linearGradient id={id + '-bg'} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor={tile ? '#3D7BF7' : '#FFFFFF'} />
-          <stop offset="1" stopColor={tile ? '#2335B8' : '#DCE6F5'} />
-        </linearGradient>
-        <linearGradient id={id + '-flap'} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor={tile ? '#FFFFFF' : '#3D6FD8'} />
-          <stop offset="1" stopColor={tile ? '#DCE6FF' : '#2A4FB0'} />
-        </linearGradient>
+        <mask id={id + '-m'}>
+          <rect width="256" height="256" fill="#fff" />
+          {counter}
+        </mask>
+        {tile && (
+          <>
+            <linearGradient id={id + '-stem'} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stopColor="#4338CA" />
+              <stop offset="1" stopColor="#1E1B6B" />
+            </linearGradient>
+            <linearGradient id={id + '-bowl'} x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stopColor="#38BDF8" />
+              <stop offset=".55" stopColor="#3B82F6" />
+              <stop offset="1" stopColor="#4F46E5" />
+            </linearGradient>
+            <linearGradient id={id + '-fold'} x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0" stopColor="#0B1040" stopOpacity=".45" />
+              <stop offset="1" stopColor="#0B1040" stopOpacity="0" />
+            </linearGradient>
+          </>
+        )}
       </defs>
-      <path d="M40 36h88a92 92 0 0 1 0 184H40a12 12 0 0 1-12-12V48a12 12 0 0 1 12-12z" fill={`url(#${id}-bg)`} />
-      <path d="M28 64l84 62a24 24 0 0 0 28 0l58-43" fill="none" stroke={`url(#${id}-flap)`} strokeWidth="22" strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx="196" cy="60" r="22" fill="#FFB547" />
+      <rect x="44" y="40" width="64" height="176" rx="22" fill={tile ? `url(#${id}-stem)` : '#FFFFFF'} fillOpacity={tile ? 1 : 0.55} />
+      <g mask={`url(#${id}-m)`}>
+        <path d="M86 40h36a88 88 0 0 1 0 176H86z" fill={tile ? `url(#${id}-bowl)` : '#FFFFFF'} />
+        {tile && <path d="M86 40h30v176H86z" fill={`url(#${id}-fold)`} />}
+      </g>
     </svg>
   );
 }

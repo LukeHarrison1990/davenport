@@ -1,3 +1,5 @@
+<p align="center"><img src="build/icon.svg" width="96" alt=""></p>
+
 # Davenport
 
 **An Outlook-style desktop client for Google Workspace.** Gmail, Google Calendar, Contacts, Google Chat and Google Tasks in one window, with the tools people rely on in Outlook: a folder pane, reading pane, ribbon, rules, Quick Steps, Search Folders, follow-up flags, a Scheduling Assistant and a To-Do bar.

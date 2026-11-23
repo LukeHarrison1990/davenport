@@ -1,15 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
   <defs>
-    <linearGradient id="a-bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#3D7BF7"/><stop offset="1" stop-color="#2335B8"/>
-    </linearGradient>
-    <linearGradient id="a-flap" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#DCE6FF"/>
-    </linearGradient>
+    <linearGradient id="dav-stem" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4338CA"/><stop offset="1" stop-color="#1E1B6B"/></linearGradient>
+    <linearGradient id="dav-bowl" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#38BDF8"/><stop offset=".55" stop-color="#3B82F6"/><stop offset="1" stop-color="#4F46E5"/></linearGradient>
+    <linearGradient id="dav-fold" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#0B1040" stop-opacity=".45"/><stop offset="1" stop-color="#0B1040" stop-opacity="0"/></linearGradient>
+    <mask id="dav-counter"><rect width="256" height="256" fill="#fff"/><path d="M108 92h14a36 36 0 0 1 0 72h-14z" fill="#000"/></mask>
   </defs>
-  <!-- D-shaped body: straight left edge, round right side -->
-  <path d="M40 36h88a92 92 0 0 1 0 184H40a12 12 0 0 1-12-12V48a12 12 0 0 1 12-12z" fill="url(#a-bg)"/>
-  <!-- envelope flap folding across the D -->
-  <path d="M28 64l84 62a24 24 0 0 0 28 0l58-43" fill="none" stroke="url(#a-flap)" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
-  <circle cx="196" cy="60" r="22" fill="#FFB547"/>
+  <!-- Davenport "Fold": a bright bowl folding over a dark stem to make the D. -->
+  <rect x="44" y="40" width="64" height="176" rx="22" fill="url(#dav-stem)"/>
+  <g mask="url(#dav-counter)">
+    <path d="M86 40h36a88 88 0 0 1 0 176H86z" fill="url(#dav-bowl)"/>
+    <path d="M86 40h30v176H86z" fill="url(#dav-fold)"/>
+  </g>
 </svg>
