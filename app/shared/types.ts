@@ -429,7 +429,7 @@ export interface Settings {
   shortcuts: 'outlook' | 'gmail';
   notifications: boolean;
   notificationSound: boolean;
-  focusedInbox: 'off' | 'categories' | 'important';
+  focusedInbox: 'off' | 'categories' | 'categoriesAll' | 'important';
   closeToTray: boolean;
   startWithWindows: boolean;
   todoBar: boolean;

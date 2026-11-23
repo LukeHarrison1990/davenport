@@ -19,7 +19,11 @@ const HIDDEN_SYSTEM = new Set([
   'UNREAD', 'IMPORTANT', 'CHAT', 'CATEGORY_PERSONAL', 'CATEGORY_SOCIAL', 'CATEGORY_PROMOTIONS', 'CATEGORY_UPDATES', 'CATEGORY_FORUMS', 'YELLOW_STAR'
 ]);
 export const SNOOZE_LABEL_NAME = 'Davenport/Snoozed';
-const OTHER_CATEGORIES = ['CATEGORY_SOCIAL', 'CATEGORY_PROMOTIONS', 'CATEGORY_UPDATES', 'CATEGORY_FORUMS'];
+// What goes in the Inbox's Other tab. By default, as in Gmail's own default tabs, only Promotions and Social:
+// Updates and Forums include a lot of ordinary mail from colleagues (anything sent to a group, say), so they stay
+// in Primary unless the user chooses the wider setting.
+export const OTHER_CATEGORIES_ALL = ['CATEGORY_SOCIAL', 'CATEGORY_PROMOTIONS', 'CATEGORY_UPDATES', 'CATEGORY_FORUMS'];
+const OTHER_CATEGORIES_DEFAULT = ['CATEGORY_SOCIAL', 'CATEGORY_PROMOTIONS'];
 
 interface MsgRow {
   account_id: string;
@@ -500,7 +504,8 @@ function withLatest(s: MessageSummary): MessageSummary {
   return { ...s, date: latest.date, snippet: latest.snippet, threadSenders: people.length === 1 && !people[0].me ? undefined : senders };
 }
 
-function applyFocused(tab: 'focused' | 'other', mode: 'categories' | 'important', where: string[], params: (string | number)[], acct?: string) {
+function applyFocused(tab: 'focused' | 'other', mode: 'categories' | 'categoriesAll' | 'important', where: string[], params: (string | number)[], acct?: string) {
+  const OTHER_CATEGORIES = mode === 'categoriesAll' ? OTHER_CATEGORIES_ALL : OTHER_CATEGORIES_DEFAULT;
   const scope = acct ? ' AND x.account_id = ?' : '';
   if (mode === 'important') {
     where.push(`m.id ${tab === 'focused' ? '' : 'NOT '}IN (SELECT x.message_id FROM message_labels x WHERE x.label_id = 'IMPORTANT'${scope})`);

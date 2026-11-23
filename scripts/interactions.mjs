@@ -309,7 +309,7 @@ await check('meeting invitations show Accept / Tentative / Decline and update th
   const added = evs.find((e) => e.title === 'Acme quarterly review');
   if (!added || added.myResponse !== 'accepted') throw new Error('not added to the calendar as accepted');
   // A Google Calendar invitation that is already in the calendar: declining updates that event.
-  await win.getByRole('tab', { name: 'Other' }).click();
+  // Google Calendar invitations are Updates, which stay in Primary.
   await win.locator('#message-list .row', { hasText: 'Invitation: Supplier call' }).first().click();
   await card.getByText('Supplier call', { exact: true }).waitFor();
   await card.getByRole('button', { name: /Decline/ }).click();
@@ -322,6 +322,20 @@ await check('meeting invitations show Accept / Tentative / Decline and update th
   await win.getByText('This email contains a Google Form').waitFor();
   await win.locator('.banner').getByRole('button', { name: 'Open form' }).waitFor();
   await win.getByRole('tab', { name: 'Primary' }).click();
+});
+
+await check('Updates stay in Primary, and moving mail into the Inbox brings it to Primary', async () => {
+  const list = (tab) => api('mail.list', { accountId: 'demo', folder: { type: 'label', id: 'INBOX' }, tab });
+  const primary = await list('focused');
+  if (!primary.some((m) => m.subject === 'Invitation: Supplier call')) throw new Error('an Updates message is not in Primary');
+  const promo = (await list('other')).find((m) => m.subject === '20% off desk chairs this week');
+  if (!promo) throw new Error('the Promotions message is not in Other');
+  await api('mail.moveToTab', 'demo', [promo.id], 'primary');
+  if (!(await list('focused')).some((m) => m.id === promo.id)) throw new Error('Move to Primary did not move it');
+  await api('mail.moveToTab', 'demo', [promo.id], 'other');
+  await api('mail.archive', 'demo', [promo.id]);
+  await api('mail.move', 'demo', [promo.id], 'INBOX', 'ALL');
+  if (!(await list('focused')).some((m) => m.id === promo.id)) throw new Error('moving into the Inbox left it in Other');
 });
 
 await check('New mail split button offers other items', async () => {
@@ -356,7 +370,7 @@ await check('submenus open beside their menu on hover, keeping the parent menu o
 });
 
 await check('flag creates a follow-up task', async () => {
-  await win.locator('#message-list .row', { hasText: 'Lena Okafor' }).click({ button: 'right' });
+  await win.locator('#message-list .row', { hasText: 'Contract draft v3 for Acme' }).click({ button: 'right' });
   await win.getByRole('menuitem', { name: /Follow up/ }).click();
   await win.getByRole('menuitem', { name: /^Tomorrow/ }).click();
   await win.waitForTimeout(500);
@@ -365,7 +379,7 @@ await check('flag creates a follow-up task', async () => {
 });
 
 await check('move to folder dialog files the message', async () => {
-  await win.locator('#message-list .row', { hasText: 'Lena Okafor' }).click();
+  await win.locator('#message-list .row', { hasText: 'Contract draft v3 for Acme' }).click();
   await win.keyboard.press('Control+Shift+V');
   await win.getByPlaceholder('Search folders').fill('acme');
   await win.locator('.dialog .menu-item', { hasText: 'Clients/Acme' }).click();

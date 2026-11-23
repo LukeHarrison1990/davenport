@@ -57,6 +57,7 @@ export interface Api {
   'mail.flag'(accountId: string, ids: string[], flagged: boolean, due?: number | null): void;
   'mail.label'(accountId: string, ids: string[], add: string[], remove: string[]): void;
   'mail.move'(accountId: string, ids: string[], toLabelId: string, fromLabelId?: string): void;
+  'mail.moveToTab'(accountId: string, ids: string[], tab: 'primary' | 'other'): void;
   'mail.archive'(accountId: string, ids: string[]): void;
   'mail.trash'(accountId: string, ids: string[]): void;
   'mail.restore'(accountId: string, ids: string[]): void;

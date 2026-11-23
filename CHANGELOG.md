@@ -1,6 +1,13 @@
 # Changelog
 
-## 1.2.0 — unreleased
+## 1.2.1 — 2026-11-23
+
+**Inbox**
+- Mail from colleagues could end up in the Inbox's **Other** tab, so it looked as if it hadn't arrived. Gmail files anything sent to a group or mailing list under Updates or Forums, and Davenport counted those as Other. Now, as in Gmail's own default tabs, only **Promotions** and **Social** go in Other; everything else is in **Primary**. To keep the old behaviour, choose "Promotions, Social, Updates and Forums go in Other" under Settings › Mail › Inbox tabs.
+- Dragging a message into the Inbox now puts it in Primary. Before, it kept its Gmail category and could land in Other, which looked like the move hadn't worked.
+- New **Move to Primary** and **Move to Other** on a message's right-click menu in the Inbox. Gmail learns from these for similar mail.
+
+## 1.2.0 — 2026-11-23
 
 **Updates**
 - Davenport now keeps itself up to date. It checks GitHub for a new version shortly after starting and every six hours, and when there's one it says so in the corner of the window: **Update** downloads it in the background, then **Restart and install** installs it and opens Davenport again. Nothing installs without you choosing to.

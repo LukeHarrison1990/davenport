@@ -209,7 +209,7 @@ export function MessageList({ folders, position, size }: { folders: Folder[]; po
         {showTabs ? (
           <div role="tablist" aria-label="Inbox view" style={{ display: 'flex' }}>
             <button className="tab" role="tab" aria-selected={tab === 'focused'} onClick={() => setTab('focused')} title={settings.focusedInbox === 'important' ? 'Mail Gmail marks as important' : 'Mail in Gmail’s Primary category'}>{settings.focusedInbox === 'important' ? 'Important' : 'Primary'}</button>
-            <button className="tab" role="tab" aria-selected={tab === 'other'} onClick={() => setTab('other')} title={settings.focusedInbox === 'important' ? 'Everything Gmail doesn’t mark as important' : 'Social, Promotions, Updates and Forums'}>Other</button>
+            <button className="tab" role="tab" aria-selected={tab === 'other'} onClick={() => setTab('other')} title={settings.focusedInbox === 'important' ? 'Everything Gmail doesn’t mark as important' : settings.focusedInbox === 'categoriesAll' ? 'Social, Promotions, Updates and Forums' : 'Promotions and Social'}>Other</button>
           </div>
         ) : (
           <span className="title">{search ? `Results for “${search}”` : mail.folderName}</span>

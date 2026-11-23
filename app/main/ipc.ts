@@ -248,6 +248,7 @@ const impl: Impl = {
   'mail.flag': (_c, a, ids, f, due) => mail.flag(a, ids, f, due),
   'mail.label': (_c, a, ids, add, remove) => mail.label(a, ids, add, remove),
   'mail.move': (_c, a, ids, to, from) => mail.move(a, ids, to, from),
+  'mail.moveToTab': (_c, a, ids, tab) => mail.moveToTab(a, ids, tab),
   'mail.archive': (_c, a, ids) => mail.archive(a, ids),
   'mail.trash': (_c, a, ids) => mail.trash(a, ids),
   'mail.restore': (_c, a, ids) => mail.restore(a, ids),

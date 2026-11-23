@@ -174,6 +174,13 @@ export function rowMenu(m: MessageSummary, sel: Sel, folders: Folder[], inFolder
       : { label: 'Snooze', icon: 'snooze', submenu: snoozeMenu(sel) },
     { sep: true },
     { label: 'Move to…', icon: 'move', hint: 'Ctrl+Shift+V', onClick: () => useApp.getState().openDialog('moveTo', { mode: 'move', sel }) },
+    ...(inFolder === 'INBOX' && useApp.getState().settings.focusedInbox.startsWith('categories')
+      ? [
+          useApp.getState().tab === 'other'
+            ? { label: 'Move to Primary', icon: 'inbox', onClick: () => void each(sel, (a, ids) => call('mail.moveToTab', a, ids, 'primary')).then(() => notify('Moved to Primary. Gmail will learn from this for similar mail.')) }
+            : { label: 'Move to Other', icon: 'inbox', onClick: () => void each(sel, (a, ids) => call('mail.moveToTab', a, ids, 'other')).then(() => notify('Moved to Other.')) }
+        ]
+      : []),
     { label: 'Archive', icon: 'archive', hint: 'Backspace', onClick: () => archive(sel) },
     inFolder === 'SPAM'
       ? { label: 'Not spam', icon: 'inbox', onClick: () => void spam(sel, false) }

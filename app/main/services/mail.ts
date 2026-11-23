@@ -342,7 +342,19 @@ export function move(accountId: string, ids: string[], to: string, from?: string
     store.modifyLocal(accountId, expanded, [], ['TRASH']);
     enqueue(accountId, 'untrash', { ids: expanded });
   }
+  if (to === 'INBOX') {
+    // Into the Inbox means where the user will see it: Primary, not the Other tab.
+    modify(accountId, expanded, ['INBOX', 'CATEGORY_PERSONAL'], [...remove.filter((r) => r !== to), ...store.OTHER_CATEGORIES_ALL]);
+    return;
+  }
   modify(accountId, expanded, to === 'ALL' ? [] : [to], remove.filter((r) => r !== to));
+}
+
+/** The Inbox's Primary and Other tabs: Gmail's categories, which also teach Gmail where similar mail should go. */
+export function moveToTab(accountId: string, ids: string[], tab: 'primary' | 'other'): void {
+  const expanded = settingsExpand(accountId, ids);
+  if (tab === 'primary') modify(accountId, expanded, ['CATEGORY_PERSONAL'], store.OTHER_CATEGORIES_ALL);
+  else modify(accountId, expanded, ['CATEGORY_PROMOTIONS'], ['CATEGORY_PERSONAL', 'CATEGORY_SOCIAL', 'CATEGORY_UPDATES', 'CATEGORY_FORUMS']);
 }
 
 export function archive(accountId: string, ids: string[]): void {

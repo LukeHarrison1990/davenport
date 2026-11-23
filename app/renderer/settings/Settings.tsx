@@ -276,7 +276,8 @@ export function SettingsDialog({ arg, onClose }: { arg?: unknown; onClose: () =>
               <label className="check"><input type="checkbox" checked={settings.blockRemoteImages} onChange={(e) => updateSettings({ blockRemoteImages: e.target.checked })} /> Don't download pictures automatically (protects your privacy)</label>
               <Field label="Inbox tabs">
                 <select className="input" value={settings.focusedInbox} onChange={(e) => updateSettings({ focusedInbox: e.target.value as never })}>
-                  <option value="categories">Primary and Other — Social, Promotions, Updates and Forums go in Other</option>
+                  <option value="categories">Primary and Other — Promotions and Social go in Other (like Gmail)</option>
+                  <option value="categoriesAll">Primary and Other — Promotions, Social, Updates and Forums go in Other</option>
                   <option value="important">Important and Other — uses Gmail's Important marker</option>
                   <option value="off">Off</option>
                 </select>
