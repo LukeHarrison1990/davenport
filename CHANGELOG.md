@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.2 — 2026-11-24
+
+**Fixes**
+- Photos attached to an email, particularly a forwarded one or one sent from a phone, could be missing from Davenport although Gmail showed them. Phones and Outlook give attached photos a hidden picture ID, and Davenport took that to mean the photo was shown inside the email, so it hid it. Now only pictures the email really shows are treated that way; everything else appears as an attachment. Emails Davenport has already downloaded are checked again the first time 1.2.2 starts, so the missing photos reappear without downloading anything.
+
 ## 1.2.1 — 2026-11-23
 
 **Inbox**

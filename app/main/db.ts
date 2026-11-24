@@ -1,11 +1,12 @@
 // Local cache: SQLite built into Electron (node:sqlite), with FTS5 for instant search.
+import { shownInline } from '../shared/attachments';
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import path from 'node:path';
 import fs from 'node:fs';
 
 let db: DatabaseSync;
 
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
@@ -96,6 +97,7 @@ export function openDatabase(userDataDir: string, file = 'davenport.db'): Databa
   const from = v ? Number(v.value) : SCHEMA_VERSION;
   if (from < 2) migrateSearchIndex();
   if (from < 3) db.exec('DROP INDEX IF EXISTS msg_thread');
+  if (from < 4) fixAttachedPictures(db);
   // Keep SQLite's statistics current so it picks the right index (cheap; only re-analyses what changed).
   db.exec('PRAGMA optimize = 0x10002');
   run('INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value', 'schema', String(SCHEMA_VERSION));
@@ -176,3 +178,28 @@ export function kvDelete(scope: string, id: string): void {
 
 export const uid = (): string =>
   Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+
+/**
+ * Before 1.2.2, any picture with a Content-ID was treated as shown inside the email, so photos attached to
+ * forwarded messages were hidden. Re-check cached messages once: pictures their HTML doesn't show become attachments.
+ */
+function fixAttachedPictures(db: DatabaseSync): void {
+  const rows = db
+    .prepare("SELECT account_id, id, body_html, attachments_json FROM messages WHERE attachments_json LIKE '%contentId%'")
+    .all() as { account_id: string; id: string; body_html: string | null; attachments_json: string }[];
+  const update = db.prepare('UPDATE messages SET attachments_json = ?, has_attach = ? WHERE account_id = ? AND id = ?');
+  for (const r of rows) {
+    let atts: { contentId?: string; role?: string }[];
+    try {
+      atts = JSON.parse(r.attachments_json);
+    } catch {
+      continue;
+    }
+    let changedAny = false;
+    for (const a of atts) if (a.contentId && !shownInline(a, r.body_html)) {
+      delete a.contentId;
+      changedAny = true;
+    }
+    if (changedAny) update.run(JSON.stringify(atts), atts.some((a) => !a.contentId && !a.role) ? 1 : 0, r.account_id, r.id);
+  }
+}

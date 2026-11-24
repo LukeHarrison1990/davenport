@@ -1,4 +1,5 @@
 // Gmail API (v1) wrappers and message parsing.
+import { shownInline } from '../../shared/attachments';
 import type { Addr, Attachment, Rule, SendAs, Vacation } from '../../shared/types';
 import { GoogleClient, pool } from './http';
 import { decodeHeader, fromBase64Url, parseAddressList, toBase64Url } from './mime';
@@ -131,6 +132,8 @@ export function parseMessage(m: GMessage): ParsedMessage {
   };
   walk(m.payload);
 
+  // Only pictures the HTML really shows are inline; other parts with a Content-ID are ordinary attachments.
+  for (const a of attachments) if (a.contentId && !shownInline(a, html)) delete a.contentId;
   const fromList = parseAddressList(h.get('from'));
   const realAttachments = attachments.filter((a) => !a.contentId && !a.role);
   return {
