@@ -1,7 +1,9 @@
 // Mail: syncing with Gmail and every action the interface can take on messages.
 import { app, BrowserWindow, dialog, session, shell } from 'electron';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import os from 'node:os';
 import type { Addr, Draft, Folder, MessageDetail, OutboxItem, Rule, SendAs, Vacation } from '../../shared/types';
 import { all, get, kvAll, kvDelete, kvGet, kvSet, run, tx, uid } from '../db';
@@ -941,18 +943,34 @@ function printSession(allowImages: boolean): Electron.Session {
       const local = /^(data|blob):/i.test(details.url);
       const isPage = details.resourceType === 'mainFrame' || details.resourceType === 'subFrame';
       const remoteImage = allowImages && details.resourceType === 'image' && /^https?:/i.test(details.url);
-      done({ cancel: !(local && (!isPage || details.resourceType === 'mainFrame')) && !remoteImage });
+      // The page itself is a temporary file Davenport has just written; nothing else on disk may be loaded.
+      const ourPage = details.resourceType === 'mainFrame' && printPages.has(details.url);
+      done({ cancel: !ourPage && !(local && (!isPage || details.resourceType === 'mainFrame')) && !remoteImage });
     });
   }
   return s;
 }
 const configuredPrintSessions = new Set<string>();
 
+/** Temporary pages being printed, as file URLs: the only files the print session may open. */
+const printPages = new Set<string>();
+
 async function renderOffscreen(m: MessageDetail): Promise<BrowserWindow> {
   const win = new BrowserWindow({ show: false, webPreferences: { javascript: false, sandbox: true, session: printSession(remoteImagesAllowed(m.from.email)) } });
   win.webContents.on('will-navigate', (e) => e.preventDefault());
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-  await win.loadURL('data:text/html;charset=utf-8;base64,' + Buffer.from(printableHtml(m)).toString('base64'));
+  // Written to a temporary file rather than passed as a data: address, which Chromium limits to about 2 MB
+  // (an email with embedded pictures easily goes over, giving ERR_INVALID_URL).
+  const file = path.join(app.getPath('temp'), `davenport-print-${crypto.randomUUID()}.html`);
+  fs.writeFileSync(file, printableHtml(m), { encoding: 'utf8', mode: 0o600 });
+  const url = pathToFileURL(file).href;
+  printPages.add(url);
+  try {
+    await win.loadURL(url);
+  } finally {
+    printPages.delete(url);
+    fs.rm(file, { force: true }, () => undefined);
+  }
   return win;
 }
 

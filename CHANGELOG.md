@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.3 — 2026-11-25
+
+**Fixes**
+- Saving some emails as a PDF, or printing them, failed with "ERR_INVALID_URL". It happened with emails that have pictures embedded in them, which made the page Davenport prints from too large for the way it was opened. Davenport now prints from a temporary file, which is deleted straight afterwards, so emails of any size work.
+
 ## 1.2.2 — 2026-11-24
 
 **Fixes**

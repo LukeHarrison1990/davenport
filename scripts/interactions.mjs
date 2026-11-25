@@ -338,6 +338,17 @@ await check('Updates stay in Primary, and moving mail into the Inbox brings it t
   if (!(await list('focused')).some((m) => m.id === promo.id)) throw new Error('moving into the Inbox left it in Other');
 });
 
+await check('saving a large email with embedded pictures as a PDF works', async () => {
+  // About 3 MB of embedded picture: over Chromium's 2 MB limit for data: addresses.
+  const big = 'data:image/png;base64,' + 'A'.repeat(3_000_000);
+  const d = { localId: 'pdf-big', accountId: 'demo', from: 'alex.morgan@northfield.example', to: [], cc: [], bcc: [], subject: 'Big photo email', html: `<p>Photo:</p><img src="${big}">`, attachments: [], mode: 'new' };
+  const saved = await api('mail.saveDraft', d);
+  const target = path.join(out, 'big-email.pdf');
+  await app.evaluate(({ dialog }, file) => { dialog.showSaveDialog = async () => ({ canceled: false, filePath: file }); }, target);
+  const written = await api('mail.savePdf', 'demo', saved.gmailMessageId);
+  if (written !== target || !fs.existsSync(target) || fs.statSync(target).size < 1000) throw new Error('no PDF was written');
+});
+
 await check('New mail split button offers other items', async () => {
   await win.locator('.split-more').first().click();
   await win.getByRole('menuitem', { name: 'Event' }).waitFor();
