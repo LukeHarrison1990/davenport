@@ -349,6 +349,19 @@ await check('saving a large email with embedded pictures as a PDF works', async 
   if (written !== target || !fs.existsSync(target) || fs.statSync(target).size < 1000) throw new Error('no PDF was written');
 });
 
+await check('pictures uploaded into Chat show in the conversation and can be opened or saved', async () => {
+  await win.keyboard.press('Control+4');
+  await win.getByText('See you at 2 in 2.04').first().click();
+  const pic = win.locator('.chat-picture img');
+  await pic.waitFor({ timeout: 5000 });
+  if (!(await pic.getAttribute('src'))?.startsWith('data:image/png;base64,')) throw new Error('the picture did not load');
+  await win.locator('.chat-picture').click({ button: 'right' });
+  await win.getByRole('menuitem', { name: 'Open' }).waitFor();
+  await win.getByRole('menuitem', { name: /Save as/ }).waitFor();
+  await win.keyboard.press('Escape');
+  await win.keyboard.press('Control+1');
+});
+
 await check('New mail split button offers other items', async () => {
   await win.locator('.split-more').first().click();
   await win.getByRole('menuitem', { name: 'Event' }).waitFor();

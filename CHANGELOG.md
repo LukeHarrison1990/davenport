@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.4 — 2026-11-27
+
+**Chat**
+- Pictures sent in Chat now show in the conversation. Click one to open it full size, or right-click for **Open** and **Save as…**.
+- Other files uploaded into Chat (PDFs, documents and so on) now open when clicked, with **Open** and **Save as…** on the right-click menu. Before, Davenport only understood files shared from Google Drive, so anything uploaded straight into Chat appeared as a "FILE" box that did nothing.
+- Google Drive files and links in Chat have **Open in Google Drive** and **Copy link** on the right-click menu.
+
 ## 1.2.3 — 2026-11-25
 
 **Fixes**

@@ -3,6 +3,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import type { Account, ChatMessage, ChatSpace, ChatStatus } from '../../shared/types';
 import { call, useLive } from '../api';
 import { Icon } from '../components/Icon';
+import { ChatAttachment } from './ChatAttachment';
 import { contextMenu, copyText } from '../components/contextMenu';
 import { openMenu, type MenuEntry } from '../components/Menu';
 import { Splitter, usePaneSize } from '../components/Splitter';
@@ -405,12 +406,11 @@ function SpaceView({ space, onThread }: { space: ChatSpace; onThread: (m: ChatMe
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div><strong>{m.mine ? 'You' : m.sender.name}</strong> <span style={{ color: 'var(--muted)', fontSize: 12 }}>{time(m.createTime)}</span></div>
                 <p>{renderText(m.text)}</p>
-                {m.attachments.map((a, i) => (
-                  <button key={i} className="attachment" onClick={() => a.url && call('app.openExternal', a.url)}>
-                    <span className="kind" style={{ background: a.kind === 'drive' ? '#1E7A45' : '#5B6472' }}>{a.kind === 'drive' ? 'DRV' : 'FILE'}</span>
-                    <span className="info"><b>{a.name}</b><span>{a.kind === 'drive' ? 'Google Drive' : 'Attachment'}</span></span>
-                  </button>
-                ))}
+                {m.attachments.length > 0 && (
+                  <div className="chat-attachments">
+                    {m.attachments.map((a, i) => <ChatAttachment key={i} a={a} accountId={m.accountId} />)}
+                  </div>
+                )}
                 <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap', alignItems: 'center' }}>
                   {m.reactions.map((r) => (
                     <button key={r.emoji} className={cx('reaction', r.mine && 'mine')} onClick={() => call('chat.react', m.accountId, m.spaceId, m.id, r.emoji).catch(fail)}>{r.emoji} {r.count}</button>

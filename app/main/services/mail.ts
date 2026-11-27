@@ -883,7 +883,14 @@ export async function openAttachment(accountId: string, messageId: string, attac
   if (isBlockedType(filename)) {
     throw new Error(`To keep your computer safe, Davenport doesn't open programs, scripts or shortcuts straight from email (${path.extname(filename) || filename}). If you trust the sender, use Save as… and check the file before opening it.`);
   }
-  const data = await attachmentData(accountId, messageId, attachmentId, filename);
+  await openFileData(await attachmentData(accountId, messageId, attachmentId, filename), filename);
+}
+
+/** Opens a received file (from email or Chat) in its usual app, from a private temporary folder. */
+export async function openFileData(data: Buffer, filename: string): Promise<void> {
+  if (isBlockedType(filename)) {
+    throw new Error(`To keep your computer safe, Davenport doesn't open programs, scripts or shortcuts straight from a message (${path.extname(filename) || filename}). If you trust the sender, use Save as… and check the file before opening it.`);
+  }
   const dir = path.join(os.tmpdir(), 'Davenport', uid());
   fs.mkdirSync(dir, { recursive: true });
   const file = path.join(dir, safeName(filename));
@@ -894,11 +901,16 @@ export async function openAttachment(accountId: string, messageId: string, attac
 }
 
 export async function saveAttachment(accountId: string, messageId: string, attachmentId: string, filename: string): Promise<string | null> {
+  return saveFileData(() => attachmentData(accountId, messageId, attachmentId, filename), filename);
+}
+
+/** Asks where to save a received file (from email or Chat), then saves it, marked as downloaded from the internet. */
+export async function saveFileData(getData: () => Promise<Buffer>, filename: string): Promise<string | null> {
   const win = BrowserWindow.getFocusedWindow();
   const opts = { defaultPath: path.join(app.getPath('downloads'), safeName(filename)) };
   const r = win ? await dialog.showSaveDialog(win, opts) : await dialog.showSaveDialog(opts);
   if (r.canceled || !r.filePath) return null;
-  fs.writeFileSync(r.filePath, await attachmentData(accountId, messageId, attachmentId, filename));
+  fs.writeFileSync(r.filePath, await getData());
   markFromInternet(r.filePath);
   return r.filePath;
 }

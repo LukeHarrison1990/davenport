@@ -53,7 +53,14 @@ interface GMessage {
   argumentText?: string;
   thread?: { name: string };
   threadReply?: boolean;
-  attachment?: { contentName?: string; driveDataRef?: { driveFileId: string }; source?: string }[];
+  attachment?: {
+    name?: string;
+    contentName?: string;
+    contentType?: string;
+    attachmentDataRef?: { resourceName?: string };
+    driveDataRef?: { driveFileId: string };
+    source?: 'UPLOADED_CONTENT' | 'DRIVE_FILE' | string;
+  }[];
   attachedGifs?: unknown[];
   emojiReactionSummaries?: { emoji?: { unicode?: string; customEmoji?: { uid: string } }; reactionCount?: number }[];
   matchedUrl?: { url: string };
@@ -89,8 +96,10 @@ const toMessage = (accountId: string, spaceId: string, m: GMessage, meId?: strin
   isThreadReply: !!m.threadReply,
   attachments: (m.attachment ?? []).map((a) => ({
     name: a.contentName ?? 'Attachment',
+    kind: a.driveDataRef ? 'drive' : 'file',
     url: a.driveDataRef ? `https://drive.google.com/open?id=${a.driveDataRef.driveFileId}` : undefined,
-    kind: a.driveDataRef ? 'drive' : 'file'
+    mimeType: a.contentType,
+    resource: a.attachmentDataRef?.resourceName
   })),
   reactions: (m.emojiReactionSummaries ?? [])
     .filter((r) => r.emoji?.unicode)
@@ -407,4 +416,47 @@ export async function setCustomStatus(accountId: string, text: string | null, em
 export function openChatSetup(accountId: string): void {
   const acc = getAccount(accountId);
   void shell.openExternal(`${CHAT_SETUP_URL}?authuser=${encodeURIComponent(acc.email)}`);
+}
+
+// ---------- Files uploaded into Chat ----------
+
+const MAX_PREVIEW = 15 * 1024 * 1024;
+const fileCache = new Map<string, Buffer>();
+
+/** Downloads a file uploaded into Chat (Chat API media download), keeping the last few in memory. */
+export async function attachmentData(accountId: string, resource: string): Promise<Buffer> {
+  const key = accountId + '|' + resource;
+  const hit = fileCache.get(key);
+  if (hit) return hit;
+  const data = isDemo(accountId)
+    ? demoChatFile(resource)
+    : await client(accountId).request<Buffer>('GET', `${CHAT}/media/${resource.split('/').map(encodeURIComponent).join('/')}`, { query: { alt: 'media' }, responseType: 'buffer' });
+  fileCache.set(key, data);
+  while (fileCache.size > 40) fileCache.delete(fileCache.keys().next().value!);
+  return data;
+}
+
+/** A picture to show in the conversation, as a data address the window can display. */
+export async function attachmentPreview(accountId: string, resource: string, mimeType: string): Promise<string | null> {
+  if (!/^image\/(png|jpe?g|gif|webp|bmp)$/i.test(mimeType)) return null;
+  const data = await attachmentData(accountId, resource);
+  if (data.length > MAX_PREVIEW) return null;
+  return `data:${mimeType.toLowerCase()};base64,${data.toString('base64')}`;
+}
+
+export async function openAttachment(accountId: string, resource: string, name: string): Promise<void> {
+  const { openFileData } = await import('./mail');
+  await openFileData(await attachmentData(accountId, resource), name);
+}
+
+export async function saveAttachment(accountId: string, resource: string, name: string): Promise<string | null> {
+  const { saveFileData } = await import('./mail');
+  return saveFileData(() => attachmentData(accountId, resource), name);
+}
+
+/** The demo account's uploaded files: a small picture made on the spot. */
+function demoChatFile(resource: string): Buffer {
+  if (!resource.startsWith('demo/')) throw new Error('No such file.');
+  // A 2 x 2 PNG (blue and amber), enough to show the preview working.
+  return Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR4nGNkYPj/n4GBgZGBgYGBAQAvEQQBOtVWZQAAAABJRU5ErkJggg==', 'base64');
 }

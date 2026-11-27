@@ -386,6 +386,17 @@ export interface ChatSpace {
   external?: boolean;
 }
 
+/** A file in a Chat message: uploaded straight into Chat, or a Google Drive file. */
+export interface ChatAttachment {
+  name: string;
+  kind: 'drive' | 'file' | 'link';
+  /** For Drive files and links: where to open them. */
+  url?: string;
+  mimeType?: string;
+  /** For files uploaded into Chat: the Chat API media reference used to download them. */
+  resource?: string;
+}
+
 export interface ChatMessage {
   accountId: string;
   spaceId: string;
@@ -396,7 +407,7 @@ export interface ChatMessage {
   threadId?: string;
   isThreadReply: boolean;
   replyCount?: number;
-  attachments: { name: string; url?: string; kind: 'drive' | 'file' | 'link' }[];
+  attachments: ChatAttachment[];
   reactions: { emoji: string; count: number; mine: boolean }[];
   mine: boolean;
 }

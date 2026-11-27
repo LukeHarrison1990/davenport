@@ -148,6 +148,9 @@ export interface Api {
   'chat.thread'(accountId: string, spaceId: string, threadId: string): ChatMessage[];
   'chat.send'(accountId: string, spaceId: string, text: string, threadId?: string): ChatMessage;
   'chat.react'(accountId: string, spaceId: string, messageId: string, emoji: string): void;
+  'chat.attachmentPreview'(accountId: string, resource: string, mimeType: string): string | null;
+  'chat.openAttachment'(accountId: string, resource: string, name: string): void;
+  'chat.saveAttachment'(accountId: string, resource: string, name: string): string | null;
   'chat.markRead'(accountId: string, spaceId: string): void;
   'chat.refresh'(accountId: string, spaceId?: string): void;
   'chat.openInBrowser'(accountId: string, spaceId: string): void;
